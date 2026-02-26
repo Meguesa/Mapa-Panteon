@@ -140,11 +140,19 @@ async function loadSecciones(){
   if (seccionesLayer) seccionesLayer.remove();
   seccionesLayer = L.geoJSON(geo, {
     style: styleSection,
+
+    // 👇 clave: cuando editas secciones, deja pasar el clic al mapa
+    interactive: !isEditSections,
+
     onEachFeature: (feature, layer) => {
       const id = feature?.properties?.id;
       const nombre = feature?.properties?.nombre || id;
       layer.bindPopup(`<b>${safe(nombre)}</b>`);
-      layer.on("click", () => selectSection(feature));
+
+      // 👇 solo permitir “entrar” a la sección cuando NO estás editando secciones
+      if (!isEditSections) {
+        layer.on("click", () => selectSection(feature));
+      }
     }
   }).addTo(map);
 
@@ -266,6 +274,7 @@ function setupSearch(){
 let editPoints = [];
 let tempLine = null;
 let tempPoly = null;
+let editMarkers = [];
 
 let createdSectionFeatures = []; // para modo secciones
 let createdLotFeatures = [];     // para modo lotes (de una sección)
@@ -291,6 +300,11 @@ function refreshEditPreview(){
 function attachMapClickForEditing(){
   map.on("click", (e) => {
     editPoints.push(e.latlng);
+
+    // 👇 puntito visible desde el primer clic
+    const m = L.circleMarker(e.latlng, { radius: 5, weight: 1, fillOpacity: 0.9 }).addTo(map);
+    editMarkers.push(m);
+
     refreshEditPreview();
     const el = document.getElementById("ptCount");
     if (el) el.textContent = String(editPoints.length);
@@ -311,6 +325,10 @@ function editorBaseUI(title, bodyHtml){
 
   document.getElementById("e_clear").onclick = () => {
     editPoints = [];
+
+    editMarkers.forEach(x => map.removeLayer(x));
+    editMarkers = [];
+
     refreshEditPreview();
     const el = document.getElementById("ptCount");
     if (el) el.textContent = "0";
@@ -352,6 +370,9 @@ function setupEditorSections(){
     createdSectionFeatures.push(feature);
 
     editPoints = [];
+    editMarkers.forEach(x => map.removeLayer(x));
+    editMarkers = [];
+
     refreshEditPreview();
     document.getElementById("ptCount").textContent = "0";
 
@@ -422,6 +443,8 @@ function setupEditorLots(){
     createdLotFeatures.push(feature);
 
     editPoints = [];
+    editMarkers.forEach(x => map.removeLayer(x));
+    editMarkers = [];
     refreshEditPreview();
     document.getElementById("ptCount").textContent = "0";
 
