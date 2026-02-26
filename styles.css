@@ -35,3 +35,17 @@ body { margin: 0; font-family: system-ui, Arial, sans-serif; }
   .layout{ grid-template-columns: 1fr; grid-template-rows: 58vh 42vh; }
   .panel{ border-left:none; border-top:1px solid #ddd; }
 }
+
+#sectionSelect{
+  padding:8px 10px;
+  border:1px solid #ccc;
+  border-radius:8px;
+  background:#fff;
+}
+#backBtn{
+  padding:8px 12px;
+  border:1px solid #ccc;
+  border-radius:8px;
+  cursor:pointer;
+  background:#f6f6f6;
+}
