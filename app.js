@@ -23,6 +23,8 @@ let paquetesInfo = {};
 // Layers
 let seccionesLayer = null;
 let lotesLayer = null;
+let seccionesLayer = null;
+let lotesLayer = null;
 
 // State
 let currentSection = null; // { id, nombre, lotesFile }
@@ -41,9 +43,19 @@ function setPanel(title, html){
 }
 function safe(v){ return (v === null || v === undefined) ? "" : String(v); }
 
-function styleSection(){
+function sectionHiddenStyle(){
+  // En modo edición de secciones, sí queremos verlas
+  if (isEditSections) return { weight: 2, opacity: 1, fillOpacity: 0.08 };
+  // Normal: invisible
+  return { weight: 2, opacity: 0, fillOpacity: 0 };
+}
+function sectionHoverStyle(){
   return { weight: 2, opacity: 1, fillOpacity: 0.08 };
 }
+function sectionPinnedStyle(){
+  return { weight: 3, opacity: 1, fillOpacity: 0.12 };
+}
+
 function styleByStatus(status){
   const s = (status || "").toLowerCase();
   if (s === "disponible") return { weight: 1, opacity: 1, fillOpacity: 0.30 };
@@ -52,11 +64,28 @@ function styleByStatus(status){
   return { weight: 1, opacity: 1, fillOpacity: 0.25 };
 }
 
+function lotHiddenStyle(){
+  // En modo edición de lotes, sí queremos verlos (si existen)
+  if (isEditLots) return { weight: 1, opacity: 1, fillOpacity: 0.20 };
+  // Normal: invisible
+  return { weight: 1, opacity: 0, fillOpacity: 0 };
+}
+function lotVisibleStyle(status){
+  // Usa tus colores por estatus (disponible/ocupado)
+  return styleByStatus(status);
+}
+function lotPinnedStyle(status){
+  const s = lotVisibleStyle(status);
+  return { ...s, weight: 2 };
+}
+
+
 async function loadJson(url){
   const r = await fetch(url, { cache: "no-store" });
   if (!r.ok) throw new Error(`No se pudo cargar: ${url}`);
   return await r.json();
 }
+
 
 /* =========================
    Panel lote
@@ -150,19 +179,34 @@ async function loadSecciones(){
   // dibujar secciones
   if (seccionesLayer) seccionesLayer.remove();
   seccionesLayer = L.geoJSON(geo, {
-    style: styleSection,
-
-    // 👇 clave: cuando editas secciones, deja pasar el clic al mapa
+    style: () => sectionHiddenStyle(),
     interactive: !isEditSections,
-
     onEachFeature: (feature, layer) => {
       const id = feature?.properties?.id;
       const nombre = feature?.properties?.nombre || id;
+
+      // (popup opcional)
       layer.bindPopup(`<b>${safe(nombre)}</b>`);
 
-      // 👇 solo permitir “entrar” a la sección cuando NO estás editando secciones
-      if (!isEditSections) {
-        layer.on("click", () => selectSection(feature));
+      if (!isEditSections){
+        // Hover (PC)
+        layer.on("mouseover", () => {
+          if (pinnedSectionLayer !== layer) layer.setStyle(sectionHoverStyle());
+        });
+        layer.on("mouseout", () => {
+          if (pinnedSectionLayer !== layer) layer.setStyle(sectionHiddenStyle());
+        });
+
+        // Tap/Click (tablet/cel) = resaltar + entrar a la sección
+        layer.on("click", async () => {
+          if (pinnedSectionLayer && pinnedSectionLayer !== layer){
+            pinnedSectionLayer.setStyle(sectionHiddenStyle());
+          }
+          pinnedSectionLayer = layer;
+          layer.setStyle(sectionPinnedStyle());
+
+          await selectSection(feature);
+        });
       }
     }
   }).addTo(map);
@@ -226,15 +270,40 @@ async function loadLotesForCurrentSection(){
 
   if (lotesLayer) lotesLayer.remove();
   lotesLayer = L.geoJSON(geo, {
+    // En modo editar lotes, los hacemos NO clickeables para que no estorben al dibujar
+    interactive: !isEditLots,
+
     style: (feature) => {
-      const id = feature?.properties?.id;
-      const status = feature?.properties?.estatus || lotesInfo[id]?.estatus;
-      return styleByStatus(status);
+      if (isEditLots) return lotHiddenStyle(); // visible suave
+      return lotHiddenStyle();                 // invisible normal
     },
+
     onEachFeature: (feature, layer) => {
       const id = feature?.properties?.id || "(sin id)";
+      const status = feature?.properties?.estatus;
+
       layer.bindPopup(`<b>${safe(id)}</b>`);
-      layer.on("click", () => showLote(id, feature.properties));
+
+      if (!isEditLots){
+        // Hover (PC)
+        layer.on("mouseover", () => {
+          if (pinnedLotLayer !== layer) layer.setStyle(lotVisibleStyle(status));
+        });
+        layer.on("mouseout", () => {
+          if (pinnedLotLayer !== layer) layer.setStyle(lotHiddenStyle());
+        });
+
+        // Tap/Click (tablet/cel) = resaltar + mostrar panel
+        layer.on("click", () => {
+          if (pinnedLotLayer && pinnedLotLayer !== layer){
+            pinnedLotLayer.setStyle(lotHiddenStyle());
+          }
+          pinnedLotLayer = layer;
+          layer.setStyle(lotPinnedStyle(status));
+
+          showLote(id, feature.properties);
+        });
+      }
     }
   }).addTo(map);
 
@@ -252,6 +321,8 @@ async function loadLotesForCurrentSection(){
 
 async function backToSecciones(){
   clearLotes();
+  pinnedSectionLayer = null;
+  pinnedLotLayer = null;
   await loadSecciones();
   $sectionSelect.value = "";
 }
