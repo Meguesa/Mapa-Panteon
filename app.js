@@ -1,16 +1,32 @@
 const BASE_IMAGE_URL = "./assets/map/base.png";
-let GEOJSON_URL      = "./data/seccion-demo.geojson";
-const LOTES_URL      = "./data/lotes.json";
+
+// Archivos “nivel 1”
+const SECCIONES_URL = "./data/secciones.geojson";
+
+// Info del lote (panel)
+const LOTES_INFO_URL = "./data/lotes.json";
 const PAQUETES_URL   = "./data/paquetes.json";
 
-// Si abres la página con ?edit=1, entra al modo dibujo
-const isEditMode = new URLSearchParams(location.search).get("edit") === "1";
+let map;
 
-let map, lotesInfo = {}, paquetesInfo = {};
-let geoLayer = null;
+// Info (panel)
+let lotesInfo = {};
+let paquetesInfo = {};
+
+// Capas del mapa (lo que se dibuja encima)
+let seccionesLayer = null; // nivel 1
+let lotesLayer = null;     // nivel 2
+
+// Estado actual
+let currentSection = null; // { id, nombre, lotesFile }
 
 const $title = document.getElementById("panelTitle");
 const $body  = document.getElementById("panelBody");
+
+const $sectionSelect = document.getElementById("sectionSelect");
+const $searchInput   = document.getElementById("searchInput");
+const $searchBtn     = document.getElementById("searchBtn");
+const $backBtn       = document.getElementById("backBtn");
 
 function setPanel(title, html){
   $title.textContent = title;
@@ -18,6 +34,9 @@ function setPanel(title, html){
 }
 function safe(v){ return (v === null || v === undefined) ? "" : String(v); }
 
+function styleSection(){
+  return { weight: 2, opacity: 1, fillOpacity: 0.08 };
+}
 function styleByStatus(status){
   const s = (status || "").toLowerCase();
   if (s === "disponible") return { weight: 1, opacity: 1, fillOpacity: 0.30 };
@@ -32,16 +51,9 @@ async function loadJson(url){
   return await r.json();
 }
 
-function findFeatureById(id){
-  let found = null;
-  if (!geoLayer) return null;
-  geoLayer.eachLayer(layer => {
-    const fid = layer?.feature?.properties?.id;
-    if (fid && fid.toLowerCase() === id.toLowerCase()) found = layer;
-  });
-  return found;
-}
-
+/* =========================
+   Panel de lote
+   ========================= */
 function showLote(id){
   const info = lotesInfo[id] || {};
   const status = info.estatus || "desconocido";
@@ -82,31 +94,84 @@ function showLote(id){
   }
 }
 
-function setupSearch(){
-  const input = document.getElementById("searchInput");
-  const btn   = document.getElementById("searchBtn");
-
-  const run = () => {
-    const id = input.value.trim();
-    if (!id) return;
-
-    const layer = findFeatureById(id);
-    if (!layer){
-      setPanel("No encontrado", `<p>No encontré el ID <b>${safe(id)}</b>.</p>`);
-      return;
-    }
-    map.fitBounds(layer.getBounds().pad(0.25));
-    showLote(layer.feature.properties.id);
-  };
-
-  btn.onclick = run;
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+/* =========================
+   Cargar / mostrar SECCIONES (nivel 1)
+   ========================= */
+function clearLotes(){
+  if (lotesLayer){ lotesLayer.remove(); lotesLayer = null; }
+  currentSection = null;
 }
 
-function addGeoLayer(geojson){
-  if (geoLayer) geoLayer.remove();
+function showOnlySeccionesPanel(){
+  setPanel("Secciones", `
+    <p>1) Selecciona una <b>sección</b> en la lista de arriba.</p>
+    <p>2) Luego podrás buscar o tocar un <b>lote</b>.</p>
+  `);
+}
 
-  geoLayer = L.geoJSON(geojson, {
+async function loadSecciones(){
+  const geo = await loadJson(SECCIONES_URL);
+
+  // Llenar el selector
+  $sectionSelect.innerHTML = `<option value="">Selecciona sección...</option>`;
+  geo.features.forEach(f => {
+    const id = f?.properties?.id;
+    const nombre = f?.properties?.nombre || id;
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = nombre;
+    $sectionSelect.appendChild(opt);
+  });
+
+  // Dibujar secciones en el mapa
+  if (seccionesLayer) seccionesLayer.remove();
+  seccionesLayer = L.geoJSON(geo, {
+    style: styleSection,
+    onEachFeature: (feature, layer) => {
+      const id = feature?.properties?.id;
+      const nombre = feature?.properties?.nombre || id;
+      layer.bindPopup(`<b>${safe(nombre)}</b>`);
+      layer.on("click", () => selectSection(feature));
+    }
+  }).addTo(map);
+
+  showOnlySeccionesPanel();
+}
+
+function selectSection(feature){
+  const props = feature?.properties || {};
+  currentSection = {
+    id: props.id,
+    nombre: props.nombre || props.id,
+    lotesFile: props.lotesFile
+  };
+
+  // sincronizar selector (si el click fue en el mapa)
+  $sectionSelect.value = props.id || "";
+
+  // zoom a la sección
+  const temp = L.geoJSON(feature);
+  map.fitBounds(temp.getBounds().pad(0.15));
+
+  // cargar lotes
+  loadLotesForCurrentSection().catch(err => {
+    setPanel("Error", `<p>No pude cargar lotes de la sección.</p><p style="color:#666;font-size:12px">${safe(err.message)}</p>`);
+  });
+}
+
+async function loadLotesForCurrentSection(){
+  if (!currentSection?.lotesFile){
+    setPanel("Sección sin archivo", `<p>Esta sección no tiene “lotesFile”.</p>`);
+    return;
+  }
+
+  // Oculta secciones (para que no estorben visualmente)
+  if (seccionesLayer) seccionesLayer.remove();
+
+  const geo = await loadJson(currentSection.lotesFile);
+
+  if (lotesLayer) lotesLayer.remove();
+  lotesLayer = L.geoJSON(geo, {
     style: (feature) => {
       const id = feature?.properties?.id;
       const status = feature?.properties?.estatus || lotesInfo[id]?.estatus;
@@ -118,162 +183,115 @@ function addGeoLayer(geojson){
       layer.on("click", () => showLote(id));
     }
   }).addTo(map);
+
+  setPanel(currentSection.nombre, `
+    <p>Ya estás dentro de la sección: <b>${safe(currentSection.nombre)}</b>.</p>
+    <p>Ahora puedes tocar un lote o buscarlo por ID.</p>
+  `);
 }
 
 /* =========================
-   MODO DIBUJO (EDIT)
+   Volver a SECCIONES (botón)
    ========================= */
-let editPoints = [];       // puntos que marcas con click
-let tempLine = null;       // línea provisional
-let tempPoly = null;       // polígono provisional
-let createdFeatures = [];  // lotes guardados “en memoria”
+async function backToSecciones(){
+  clearLotes();
 
-function toGeoJSONPolygon(pointsLatLng){
-  // Leaflet (CRS.Simple): lat = Y, lng = X
-  // GeoJSON requiere [X,Y] => [lng,lat]
-  const coords = pointsLatLng.map(p => [p.lng, p.lat]);
-  if (coords.length) coords.push(coords[0]); // cerrar el contorno
-  return { type: "Polygon", coordinates: [coords] };
+  // volver a dibujar secciones
+  await loadSecciones();
+  $sectionSelect.value = "";
 }
 
-function refreshEditPreview(){
-  if (tempLine) map.removeLayer(tempLine);
-  if (tempPoly) map.removeLayer(tempPoly);
-
-  if (editPoints.length >= 2){
-    tempLine = L.polyline(editPoints, { weight: 2 }).addTo(map);
-  }
-  if (editPoints.length >= 3){
-    tempPoly = L.polygon(editPoints, { weight: 2, fillOpacity: 0.12 }).addTo(map);
-  }
-}
-
-function setupEditorUI(){
-  setPanel("Modo dibujo (edit=1)", `
-    <p><b>Cómo dibujar:</b> haz clic en el mapa para marcar puntos alrededor del lote.</p>
-    <p><b>Tip:</b> haz zoom para acercarte y que quede más preciso.</p>
-    <p><b>Puntos marcados:</b> <span id="ptCount">0</span></p>
-
-    <label><b>ID del lote</b></label><br/>
-    <input id="e_id" placeholder="Ej. L-1411" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:8px;" />
-
-    <label><b>Estatus</b></label><br/>
-    <select id="e_status" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:8px;">
-      <option>disponible</option>
-      <option>ocupado</option>
-      <option>por construir</option>
-    </select>
-
-    <label><b>Paquete (opcional)</b></label><br/>
-    <input id="e_pkg" placeholder="Ej. PAQ-JARDIN-STD" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:8px;" />
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-      <button id="e_save"  style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Guardar lote</button>
-      <button id="e_copy"  style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Copiar GeoJSON</button>
-      <button id="e_clear" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Limpiar puntos</button>
-    </div>
-
-    <p style="font-size:12px;color:#666;margin-top:10px;">
-      “Copiar GeoJSON” te da el texto para pegarlo en un archivo dentro de <b>/data</b>.
-    </p>
-  `);
-
-  const ptCount = document.getElementById("ptCount");
-  const idEl = document.getElementById("e_id");
-  const stEl = document.getElementById("e_status");
-  const pkEl = document.getElementById("e_pkg");
-
-  function updateCount(){ ptCount.textContent = String(editPoints.length); }
-  updateCount();
-
-  document.getElementById("e_clear").onclick = () => {
-    editPoints = [];
-    refreshEditPreview();
-    updateCount();
-  };
-
-  document.getElementById("e_save").onclick = () => {
-    const id = idEl.value.trim();
-    if (!id) return alert("Pon un ID (ej. L-1411).");
-    if (editPoints.length < 3) return alert("Necesitas mínimo 3 puntos.");
-
-    const feature = {
-      type: "Feature",
-      geometry: toGeoJSONPolygon(editPoints),
-      properties: {
-        id,
-        estatus: stEl.value,
-        paquete: pkEl.value.trim() || null
-      }
-    };
-
-    createdFeatures.push(feature);
-
-    // reset para el siguiente lote
-    editPoints = [];
-    refreshEditPreview();
-    updateCount();
-
-    alert(`Guardado: ${id}. Puedes dibujar otro lote ahora.`);
-  };
-
-  document.getElementById("e_copy").onclick = async () => {
-    const fc = { type: "FeatureCollection", features: createdFeatures };
-    const txt = JSON.stringify(fc, null, 2);
-
-    try {
-      await navigator.clipboard.writeText(txt);
-      alert("Copiado al portapapeles. Ahora pégalo en un archivo .geojson en /data.");
-    } catch {
-      // fallback: mostrar el texto si el navegador bloquea el portapapeles
-      setPanel("Copia manual", `<p>Copia este texto:</p><pre style="white-space:pre-wrap">${safe(txt)}</pre>`);
-    }
-  };
-
-  // Click en mapa = agregar punto
-  map.on("click", (e) => {
-    editPoints.push(e.latlng);
-    refreshEditPreview();
-    updateCount();
+/* =========================
+   Búsqueda de lotes
+   ========================= */
+function findLoteLayerById(id){
+  let found = null;
+  if (!lotesLayer) return null;
+  lotesLayer.eachLayer(layer => {
+    const fid = layer?.feature?.properties?.id;
+    if (fid && fid.toLowerCase() === id.toLowerCase()) found = layer;
   });
+  return found;
 }
 
+function setupSearch(){
+  const run = () => {
+    const id = $searchInput.value.trim();
+    if (!id) return;
+
+    if (!currentSection){
+      setPanel("Primero sección", `<p>Primero selecciona una <b>sección</b> para poder buscar lotes.</p>`);
+      return;
+    }
+
+    const layer = findLoteLayerById(id);
+    if (!layer){
+      setPanel("No encontrado", `<p>No encontré el ID <b>${safe(id)}</b> dentro de ${safe(currentSection.nombre)}.</p>`);
+      return;
+    }
+
+    map.fitBounds(layer.getBounds().pad(0.25));
+    showLote(layer.feature.properties.id);
+  };
+
+  $searchBtn.onclick = run;
+  $searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+}
+
+/* =========================
+   Inicialización general
+   ========================= */
 async function main(){
   map = L.map("map", { crs: L.CRS.Simple, minZoom: -3, maxZoom: 4 });
 
-  try { lotesInfo = await loadJson(LOTES_URL); } catch { lotesInfo = {}; }
+  // Cargar info panel (si no existen, no rompe)
+  try { lotesInfo = await loadJson(LOTES_INFO_URL); } catch { lotesInfo = {}; }
   try { paquetesInfo = await loadJson(PAQUETES_URL); } catch { paquetesInfo = {}; }
 
+  // Cargar imagen base
   const img = new Image();
   img.onload = async () => {
     const w = img.naturalWidth;
     const h = img.naturalHeight;
-
     const bounds = [[0,0],[h,w]];
+
     L.imageOverlay(BASE_IMAGE_URL, bounds).addTo(map);
     map.fitBounds(bounds);
 
-    // En modo normal, cargamos GeoJSON; en modo dibujo también lo cargamos (si existe)
-    try {
-      const geo = await loadJson(GEOJSON_URL);
-      addGeoLayer(geo);
-    } catch {
-      // no pasa nada si aún no existe o no está listo
-    }
-
-    if (isEditMode) setupEditorUI();
+    await loadSecciones(); // arranca en nivel 1
   };
 
-  img.onerror = () => {
-    setPanel("Falta base.png", `
-      <p>No encontré la imagen del mapa en:</p>
-      <p><code>${safe(BASE_IMAGE_URL)}</code></p>
-    `);
-  };
-
+  img.onerror = () => setPanel("Falta base.png", `<p>No encontré <code>${safe(BASE_IMAGE_URL)}</code></p>`);
   img.src = BASE_IMAGE_URL;
 
+  // Eventos UI
   setupSearch();
+
+  $sectionSelect.onchange = async () => {
+    const selectedId = $sectionSelect.value;
+    if (!selectedId){
+      await backToSecciones();
+      return;
+    }
+
+    // buscar la feature de esa sección en la capa
+    // (si la capa ya no está porque estamos viendo lotes, recargamos secciones primero)
+    if (!seccionesLayer){
+      await loadSecciones();
+    }
+
+    let targetFeature = null;
+    seccionesLayer.eachLayer(layer => {
+      const f = layer?.feature;
+      if (f?.properties?.id === selectedId) targetFeature = f;
+    });
+
+    if (targetFeature){
+      selectSection(targetFeature);
+    }
+  };
+
+  $backBtn.onclick = () => backToSecciones();
 }
 
 main();
