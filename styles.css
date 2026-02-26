@@ -49,3 +49,14 @@ body { margin: 0; font-family: system-ui, Arial, sans-serif; }
   cursor:pointer;
   background:#f6f6f6;
 }
+#toggleLotsBtn{
+  padding:8px 12px;
+  border:1px solid #ccc;
+  border-radius:8px;
+  cursor:pointer;
+  background:#f6f6f6;
+}
+#toggleLotsBtn:disabled{
+  opacity: .5;
+  cursor: not-allowed;
+}

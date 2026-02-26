@@ -33,14 +33,18 @@ let pinnedLotLayer = null;
 // sección actual
 let currentSection = null; // { id, nombre, lotesFile }
 
+// mostrar todos los lotes (toggle)
+let showAllLots = false;
+
 // DOM
 const $title = document.getElementById("panelTitle");
 const $body  = document.getElementById("panelBody");
 
-const $sectionSelect = document.getElementById("sectionSelect");
-const $searchInput   = document.getElementById("searchInput");
-const $searchBtn     = document.getElementById("searchBtn");
-const $backBtn       = document.getElementById("backBtn");
+const $sectionSelect  = document.getElementById("sectionSelect");
+const $searchInput    = document.getElementById("searchInput");
+const $searchBtn      = document.getElementById("searchBtn");
+const $backBtn        = document.getElementById("backBtn");
+const $toggleLotsBtn  = document.getElementById("toggleLotsBtn");
 
 /* =========================================================
    HELPERS
@@ -55,11 +59,6 @@ async function loadJson(url){
   const r = await fetch(url, { cache: "no-store" });
   if (!r.ok) throw new Error(`No se pudo cargar: ${url}`);
   return await r.json();
-}
-
-// (opcional) útil para móvil
-function isTouchDevice(){
-  return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
 }
 
 /* =========================================================
@@ -78,7 +77,7 @@ function sectionPinnedStyle(){
   return { weight: 3, opacity: 1, fillOpacity: 0.12 };
 }
 
-// Lotes: ocultos por defecto (en modo normal), visibles en hover/click
+// Lotes: ocultos por defecto (en modo normal), visibles en hover/click o toggle
 function styleByStatus(status){
   const s = (status || "").toLowerCase();
   if (s === "disponible") return { weight: 1, opacity: 1, fillOpacity: 0.30 };
@@ -98,6 +97,34 @@ function lotVisibleStyle(status){
 function lotPinnedStyle(status){
   const s = lotVisibleStyle(status);
   return { ...s, weight: 2 };
+}
+
+// Base style para lotes según toggle
+function lotBaseStyle(status){
+  if (isEditLots) return lotHiddenStyle();
+  return showAllLots ? lotVisibleStyle(status) : lotHiddenStyle();
+}
+
+function updateToggleLotsButton(){
+  if (!$toggleLotsBtn) return;
+
+  const enabled = !!currentSection && !isEditLots && !isEditSections;
+  $toggleLotsBtn.disabled = !enabled;
+  $toggleLotsBtn.textContent = showAllLots ? "Ocultar lotes" : "Mostrar lotes";
+}
+
+function applyLotsVisibility(){
+  if (!lotesLayer) return;
+
+  lotesLayer.eachLayer(layer => {
+    const status = layer.feature?.properties?.estatus;
+
+    if (pinnedLotLayer === layer){
+      layer.setStyle(lotPinnedStyle(status));
+    } else {
+      layer.setStyle(lotBaseStyle(status));
+    }
+  });
 }
 
 /* =========================================================
@@ -228,6 +255,7 @@ async function loadSecciones(){
     }
   }).addTo(map);
 
+  updateToggleLotsButton();
   showOnlySeccionesPanel();
 }
 
@@ -278,10 +306,12 @@ async function loadLotesForCurrentSection(){
   lotesLayer = L.geoJSON(geo, {
     // En edit lots, NO queremos que la capa estorbe al dibujar (clicks van al mapa)
     interactive: !isEditLots,
+
     style: (feature) => {
-      if (isEditLots) return lotHiddenStyle();
-      return lotHiddenStyle(); // ocultos por defecto
+      const status = feature?.properties?.estatus;
+      return lotBaseStyle(status);
     },
+
     onEachFeature: (feature, layer) => {
       const id = feature?.properties?.id || "(sin id)";
       const status = feature?.properties?.estatus;
@@ -295,13 +325,14 @@ async function loadLotesForCurrentSection(){
         if (pinnedLotLayer !== layer) layer.setStyle(lotVisibleStyle(status));
       });
       layer.on("mouseout", () => {
-        if (pinnedLotLayer !== layer) layer.setStyle(lotHiddenStyle());
+        if (pinnedLotLayer !== layer) layer.setStyle(lotBaseStyle(status));
       });
 
       // Tap/Click = fijar + panel
       layer.on("click", () => {
         if (pinnedLotLayer && pinnedLotLayer !== layer){
-          pinnedLotLayer.setStyle(lotHiddenStyle());
+          const prevStatus = pinnedLotLayer.feature?.properties?.estatus;
+          pinnedLotLayer.setStyle(lotBaseStyle(prevStatus));
         }
         pinnedLotLayer = layer;
         layer.setStyle(lotPinnedStyle(status));
@@ -309,6 +340,9 @@ async function loadLotesForCurrentSection(){
       });
     }
   }).addTo(map);
+
+  updateToggleLotsButton();
+  applyLotsVisibility();
 
   const tipEditLots = isEditLots
     ? `<hr/><p><b>Modo edición LOTES:</b> dibuja y luego “Copiar GeoJSON (lotes)”.</p>`
@@ -326,11 +360,14 @@ async function backToSecciones(){
   pinnedSectionLayer = null;
   pinnedLotLayer = null;
 
+  showAllLots = false;
+
   clearLotsLayer();
 
   // recargar secciones
   await loadSecciones();
   $sectionSelect.value = "";
+  updateToggleLotsButton();
 }
 
 /* =========================================================
@@ -366,7 +403,8 @@ function setupSearch(){
 
     // fijarlo visible aunque no haya hover
     if (pinnedLotLayer && pinnedLotLayer !== layer){
-      pinnedLotLayer.setStyle(lotHiddenStyle());
+      const prevStatus = pinnedLotLayer.feature?.properties?.estatus;
+      pinnedLotLayer.setStyle(lotBaseStyle(prevStatus));
     }
     pinnedLotLayer = layer;
     const st = layer.feature?.properties?.estatus;
@@ -571,7 +609,7 @@ function setupEditorLots(){
    INIT
    ========================================================= */
 async function main(){
-  // Si algo truena, al menos lo mostramos en el panel
+  // si algo truena, mostrarlo
   window.addEventListener("error", (e) => {
     setPanel("Error en la página", `<p>${safe(e.message)}</p>`);
   });
@@ -582,7 +620,7 @@ async function main(){
   try { lotesInfo = await loadJson(LOTES_INFO_URL); } catch { lotesInfo = {}; }
   try { paquetesInfo = await loadJson(PAQUETES_URL); } catch { paquetesInfo = {}; }
 
-  // cargar base image
+  // base image
   const img = new Image();
   img.onload = async () => {
     const w = img.naturalWidth;
@@ -642,12 +680,6 @@ async function main(){
     });
 
     if (targetFeature){
-      // fijar visualmente la sección (si estamos en modo normal)
-      if (!isEditSections){
-        if (pinnedSectionLayer && pinnedSectionLayer !== seccionesLayer){
-          // no hacemos nada aquí: el pinned real se setea en click del layer
-        }
-      }
       await selectSection(targetFeature);
     }
   };
@@ -655,12 +687,21 @@ async function main(){
   $backBtn.onclick = async () => {
     await backToSecciones();
     if (isEditLots){
-      // reset editor state
       createdLotFeatures = [];
       resetEditorDrawing();
       setupEditorLots(); // mostrará “Primero selecciona sección”
     }
   };
+
+  if ($toggleLotsBtn){
+    $toggleLotsBtn.onclick = () => {
+      showAllLots = !showAllLots;
+      applyLotsVisibility();
+      updateToggleLotsButton();
+    };
+  }
+
+  updateToggleLotsButton();
 }
 
 main();
