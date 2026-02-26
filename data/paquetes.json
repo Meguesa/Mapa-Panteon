@@ -1,0 +1,6 @@
+{
+  "PAQ-JARDIN-STD": {
+    "nombre": "Paquete Jardín Estándar",
+    "items": ["Lote", "Apertura/Cierre", "Administración"]
+  }
+}
