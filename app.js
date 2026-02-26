@@ -159,7 +159,7 @@ async function loadSecciones(){
   showOnlySeccionesPanel();
 }
 
-function selectSection(feature){
+async function selectSection(feature){
   const props = feature?.properties || {};
   currentSection = {
     id: props.id,
@@ -173,10 +173,24 @@ function selectSection(feature){
   const temp = L.geoJSON(feature);
   map.fitBounds(temp.getBounds().pad(0.15));
 
-  // cargar lotes
-  loadLotesForCurrentSection().catch(err => {
+  try {
+    // 👇 importante: esperamos a que termine de cargar lotes
+    await loadLotesForCurrentSection();
+
+    // 👇 y AHORA sí, si estás en edit=lots, mostramos el formulario
+    if (isEditLots){
+      // reset rápido del dibujo actual
+      editPoints = [];
+      editMarkers.forEach(x => map.removeLayer(x));
+      editMarkers = [];
+      refreshEditPreview();
+
+      attachMapClickForEditing();
+      setupEditorLots();
+    }
+  } catch (err){
     setPanel("Error", `<p>No pude cargar lotes.</p><p style="color:#666;font-size:12px">${safe(err.message)}</p>`);
-  });
+  }
 }
 
 async function loadLotesForCurrentSection(){
@@ -275,6 +289,7 @@ let editPoints = [];
 let tempLine = null;
 let tempPoly = null;
 let editMarkers = [];
+let editClickAttached = false;
 
 let createdSectionFeatures = []; // para modo secciones
 let createdLotFeatures = [];     // para modo lotes (de una sección)
@@ -298,10 +313,12 @@ function refreshEditPreview(){
 }
 
 function attachMapClickForEditing(){
+  if (editClickAttached) return;   // evita duplicar el evento
+  editClickAttached = true;
+
   map.on("click", (e) => {
     editPoints.push(e.latlng);
 
-    // 👇 puntito visible desde el primer clic
     const m = L.circleMarker(e.latlng, { radius: 5, weight: 1, fillOpacity: 0.9 }).addTo(map);
     editMarkers.push(m);
 
@@ -520,13 +537,7 @@ async function main(){
     });
 
     if (targetFeature){
-      selectSection(targetFeature);
-
-      // Si estamos en modo editar lotes, activamos el editor después de entrar a sección
-      if (isEditLots){
-        attachMapClickForEditing();
-        setupEditorLots();
-      }
+      await selectSection(targetFeature);
     }
   };
 
