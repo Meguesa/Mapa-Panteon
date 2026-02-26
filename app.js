@@ -61,18 +61,22 @@ async function loadJson(url){
 /* =========================
    Panel lote
    ========================= */
-function showLote(id){
-  const info = lotesInfo[id] || {};
-  const status = info.estatus || "desconocido";
+function showLote(id, propsFromMap){
+  const status =
+    (propsFromMap?.estatus) ||
+    (lotesInfo[id]?.estatus) ||
+    "desconocido";
+
+  const paqueteKey =
+    (propsFromMap?.paquete ?? lotesInfo[id]?.paquete ?? null);
 
   let html = `
     <p><b>ID:</b> ${safe(id)}</p>
     <p><b>Estatus:</b> ${safe(status)}</p>
   `;
 
-  if (status.toLowerCase() === "disponible"){
+  if (String(status).toLowerCase() === "disponible"){
     html += `<h3>Paquetes</h3>`;
-    const paqueteKey = info.paquete || null;
     if (paqueteKey && paquetesInfo[paqueteKey]){
       const p = paquetesInfo[paqueteKey];
       html += `<p><b>${safe(p.nombre)}</b></p>`;
@@ -82,7 +86,7 @@ function showLote(id){
     }
   }
 
-  if (status.toLowerCase() === "ocupado"){
+  if (String(status).toLowerCase() === "ocupado"){
     html += `
       <button id="moreBtn" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">
         Más información
@@ -223,7 +227,7 @@ async function loadLotesForCurrentSection(){
     onEachFeature: (feature, layer) => {
       const id = feature?.properties?.id || "(sin id)";
       layer.bindPopup(`<b>${safe(id)}</b>`);
-      layer.on("click", () => showLote(id));
+      layer.on("click", () => showLote(id, feature.properties));
     }
   }).addTo(map);
 
@@ -275,7 +279,7 @@ function setupSearch(){
     }
 
     map.fitBounds(layer.getBounds().pad(0.25));
-    showLote(layer.feature.properties.id);
+    showLote(layer.feature.properties.id, layer.feature.properties);
   };
 
   $searchBtn.onclick = run;
