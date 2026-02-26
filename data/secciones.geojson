@@ -1,0 +1,17 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[50,50],[450,50],[450,350],[50,350],[50,50]]]
+      },
+      "properties": {
+        "id": "SEC-001",
+        "nombre": "Sección Demo",
+        "lotesFile": "./data/lotes-sec-001.geojson"
+      }
+    }
+  ]
+}

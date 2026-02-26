@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[100,100],[180,100],[180,170],[100,170],[100,100]]]
+      },
+      "properties": { "id": "L-0001", "estatus": "disponible", "paquete": "PAQ-JARDIN-STD" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[210,100],[290,100],[290,170],[210,170],[210,100]]]
+      },
+      "properties": { "id": "L-0002", "estatus": "ocupado", "paquete": null }
+    }
+  ]
+}
