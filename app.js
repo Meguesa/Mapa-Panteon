@@ -78,7 +78,6 @@ function isSameLatLng(a,b){
    ANIMACIONES (PASO 2)
    ========================================================= */
 function flyToBoundsSmooth(bounds, durationSeconds){
-  // "bounds" ya puede venir con .pad(...)
   try {
     if (map.flyToBounds){
       map.flyToBounds(bounds, {
@@ -95,7 +94,6 @@ function flyToBoundsSmooth(bounds, durationSeconds){
 }
 
 function pulseLayer(layer, baseStyle, pulseAdd){
-  // pulseAdd: { weightAdd, fillAdd, ms }
   const ms = pulseAdd?.ms ?? 220;
   const weightAdd = pulseAdd?.weightAdd ?? 2;
   const fillAdd = pulseAdd?.fillAdd ?? 0.12;
@@ -213,6 +211,133 @@ function showLote(id, propsFromMap){
   setPanel(`Lote ${id}`, html);
   const btn = document.getElementById("moreBtn");
   if (btn) btn.onclick = () => alert("Aquí irá el login + consulta segura del saldo (fase futura).");
+}
+
+/* =========================================================
+   BULK LIST (PASO 4): cargar listas pegadas (Excel/Sheets)
+   ========================================================= */
+const bulk = {
+  sections: { items: [], idx: 0, enabled: false },
+  lots:     { items: [], idx: 0, enabled: false }
+};
+
+function detectDelimiter(line){
+  if (line.includes("\t")) return "\t";
+  if (line.includes(",")) return ",";
+  if (line.includes(";")) return ";";
+  if (line.includes("|")) return "|";
+  // fallback: espacios múltiples
+  return null;
+}
+
+function splitFields(line){
+  const d = detectDelimiter(line);
+  if (d) return line.split(d).map(s => s.trim());
+  // fallback por espacios (2+ espacios)
+  return line.split(/\s{2,}/).map(s => s.trim());
+}
+
+function parseSectionList(text){
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length);
+
+  const items = [];
+  for (const line of lines){
+    const cols = splitFields(line).filter(Boolean);
+    if (!cols.length) continue;
+
+    // saltar header típico
+    if (cols[0].toLowerCase() === "id") continue;
+
+    const id = (cols[0] || "").trim();
+    if (!id) continue;
+
+    const nombre = (cols[1] || id).trim();
+    items.push({ id, nombre });
+  }
+  return items;
+}
+
+function parseLotList(text){
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length);
+
+  const items = [];
+  for (const line of lines){
+    const cols = splitFields(line).filter(c => c !== undefined && c !== null);
+    if (!cols.length) continue;
+
+    // saltar header típico
+    if ((cols[0] || "").toLowerCase() === "id") continue;
+
+    const id = (cols[0] || "").trim();
+    if (!id) continue;
+
+    const estatus = (cols[1] || "disponible").trim() || "disponible";
+    const paquete = (cols[2] || "").trim() || null;
+
+    items.push({ id, estatus, paquete });
+  }
+  return items;
+}
+
+function bulkStatusHTML(kind){
+  const b = bulk[kind];
+  const total = b.items.length;
+  const left = Math.max(0, total - b.idx);
+  const next = b.items[b.idx];
+
+  const nextTxt = next
+    ? (kind === "sections"
+        ? `${next.id} — ${next.nombre}`
+        : `${next.id} — ${next.estatus}${next.paquete ? ` — ${next.paquete}` : ""}`)
+    : "(sin siguiente)";
+
+  return `
+    <div style="padding:8px;border:1px solid #eee;border-radius:10px;background:#fafafa;margin-top:10px;">
+      <div><b>Lista cargada:</b> ${total} | <b>Restantes:</b> ${left}</div>
+      <div><b>Usar lista al crear:</b> ${b.enabled ? "Sí" : "No"}</div>
+      <div style="font-size:12px;color:#666;"><b>Siguiente:</b> ${safe(nextTxt)}</div>
+    </div>
+  `;
+}
+
+function bulkFillCreateFields(kind){
+  const b = bulk[kind];
+  if (!b.enabled) return;
+  const next = b.items[b.idx];
+  if (!next) return;
+
+  // Solo auto-llenar si los inputs existen (estamos en Create)
+  const idEl = document.getElementById("newId");
+  if (!idEl) return;
+
+  if (kind === "sections"){
+    const nameEl = document.getElementById("newName");
+    idEl.value = next.id;
+    if (nameEl) nameEl.value = next.nombre || next.id;
+  } else {
+    const stEl = document.getElementById("newStatus");
+    const pkEl = document.getElementById("newPkg");
+    idEl.value = next.id;
+    if (stEl) stEl.value = next.estatus || "disponible";
+    if (pkEl) pkEl.value = next.paquete || "";
+  }
+
+  const nextEl = document.getElementById("bulkNext");
+  if (nextEl){
+    nextEl.innerHTML = bulkStatusHTML(kind);
+  }
+}
+
+function bulkConsume(kind){
+  const b = bulk[kind];
+  if (!b.enabled) return;
+  if (b.idx < b.items.length) b.idx += 1;
 }
 
 /* =========================================================
@@ -401,8 +526,42 @@ function startEditingLayer(layer){
 }
 
 /* =========================================================
-   EDIT PANELS (SECTIONS / LOTS)
+   EDIT PANELS (SECTIONS / LOTS) + BULK
    ========================================================= */
+function renderBulkLoader(kind){
+  const dest = (kind === "sections")
+    ? "data/secciones.geojson"
+    : (currentSection?.lotesFile || "(elige sección arriba)");
+
+  const hint = (kind === "sections")
+    ? `Ejemplo:\nSEC-001,San Juan VIP 2\nSEC-002,San Andrés B`
+    : `Ejemplo:\nL-1001,disponible,PAQ-JARDIN-STD\nL-1002,ocupado,\nL-1003,disponible,PAQ-JARDIN-STD`;
+
+  const enabledText = bulk[kind].enabled ? "Sí" : "No";
+
+  return `
+    <p><b>Cargar lista (pegar desde Excel/Sheets):</b></p>
+    <textarea id="bulkText" rows="8" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:10px;">${safe(hint)}</textarea>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+      <button id="bulkLoadBtn" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Cargar</button>
+      <button id="bulkClearBtn" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Limpiar</button>
+      <button id="bulkToggleBtn" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">
+        Usar lista al crear: ${enabledText}
+      </button>
+      <button id="bulkSkipBtn" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Saltar 1</button>
+    </div>
+
+    <div id="bulkNext" style="margin-top:10px;">
+      ${bulkStatusHTML(kind)}
+    </div>
+
+    <p style="font-size:12px;color:#666;margin-top:10px;">
+      Destino: <b>${safe(dest)}</b>
+    </p>
+  `;
+}
+
 function renderEditSectionsPanel(){
   editor.mode = "edit";
   stopEditingSelected();
@@ -414,12 +573,15 @@ function renderEditSectionsPanel(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button id="btnModeEdit" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Editar existente</button>
       <button id="btnModeCreate" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Crear nueva</button>
+      <button id="btnBulk" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Cargar lista</button>
       <button id="btnCopy" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Copiar GeoJSON</button>
       <button id="btnExit" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Salir</button>
     </div>
 
     <hr/>
     <div id="editBody"></div>
+
+    ${bulkStatusHTML("sections")}
 
     <p style="font-size:12px;color:#666;margin-top:10px;">
       Destino: <b>data/secciones.geojson</b>
@@ -439,6 +601,7 @@ function renderEditSectionsPanel(){
     editor.mode = "create";
     stopEditingSelected();
     clearDraw();
+
     $editBody.innerHTML = `
       <p><b>Crear:</b> haz clic para poner puntos.</p>
       <p><b>Puntos:</b> <span id="ptCount">0</span></p>
@@ -453,12 +616,20 @@ function renderEditSectionsPanel(){
         <button id="btnSaveNew" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Guardar nueva</button>
         <button id="btnClearDraw" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Limpiar puntos</button>
       </div>
+
+      <div id="bulkNext" style="margin-top:10px;">
+        ${bulkStatusHTML("sections")}
+      </div>
     `;
 
     document.getElementById("btnClearDraw").onclick = () => clearDraw();
 
+    // Auto-llenar si la lista está activa
+    bulkFillCreateFields("sections");
+
     document.getElementById("btnSaveNew").onclick = () => {
       if (editor.drawPoints.length < 3) return alert("Necesitas mínimo 3 puntos.");
+
       const id = document.getElementById("newId").value.trim();
       if (!id) return alert("Falta el ID.");
       const nombre = document.getElementById("newName").value.trim();
@@ -473,7 +644,49 @@ function renderEditSectionsPanel(){
       seccionesGeo.features.push(feature);
       rerenderSeccionesLayer_Edit();
       clearDraw();
+
+      // Avanza lista si está activa
+      bulkConsume("sections");
+      bulkFillCreateFields("sections");
+
       alert("Sección creada en memoria. Copia el GeoJSON y pégalo en data/secciones.geojson");
+    };
+
+    // en create, las secciones NO deben robar clicks
+    rerenderSeccionesLayer_Edit();
+  };
+
+  document.getElementById("btnBulk").onclick = () => {
+    editor.mode = "edit";
+    stopEditingSelected();
+    clearDraw();
+
+    $editBody.innerHTML = renderBulkLoader("sections");
+
+    document.getElementById("bulkLoadBtn").onclick = () => {
+      const txt = document.getElementById("bulkText").value;
+      bulk.sections.items = parseSectionList(txt);
+      bulk.sections.idx = 0;
+      alert(`Lista cargada: ${bulk.sections.items.length} secciones`);
+      renderEditSectionsPanel();
+    };
+
+    document.getElementById("bulkClearBtn").onclick = () => {
+      bulk.sections.items = [];
+      bulk.sections.idx = 0;
+      bulk.sections.enabled = false;
+      alert("Lista borrada.");
+      renderEditSectionsPanel();
+    };
+
+    document.getElementById("bulkToggleBtn").onclick = () => {
+      bulk.sections.enabled = !bulk.sections.enabled;
+      renderEditSectionsPanel();
+    };
+
+    document.getElementById("bulkSkipBtn").onclick = () => {
+      if (bulk.sections.idx < bulk.sections.items.length) bulk.sections.idx += 1;
+      renderEditSectionsPanel();
     };
 
     rerenderSeccionesLayer_Edit();
@@ -489,9 +702,7 @@ function renderEditSectionsPanel(){
     }
   };
 
-  document.getElementById("btnExit").onclick = () => {
-    location.href = "./";
-  };
+  document.getElementById("btnExit").onclick = () => location.href = "./";
 
   document.getElementById("btnModeEdit").click();
 }
@@ -510,12 +721,15 @@ function renderEditLotsPanel(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button id="btnModeEdit" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Editar existente</button>
       <button id="btnModeCreate" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Crear nuevo</button>
+      <button id="btnBulk" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Cargar lista</button>
       <button id="btnCopy" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Copiar GeoJSON</button>
       <button id="btnExit" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Salir</button>
     </div>
 
     <hr/>
     <div id="editBody"></div>
+
+    ${bulkStatusHTML("lots")}
 
     <p style="font-size:12px;color:#666;margin-top:10px;">
       Destino: <b>${safe(dest)}</b>
@@ -559,12 +773,20 @@ function renderEditLotsPanel(){
         <button id="btnSaveNew" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Guardar nuevo</button>
         <button id="btnClearDraw" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">Limpiar puntos</button>
       </div>
+
+      <div id="bulkNext" style="margin-top:10px;">
+        ${bulkStatusHTML("lots")}
+      </div>
     `;
 
     document.getElementById("btnClearDraw").onclick = () => clearDraw();
 
+    // Auto-llenar si la lista está activa
+    bulkFillCreateFields("lots");
+
     document.getElementById("btnSaveNew").onclick = () => {
       if (editor.drawPoints.length < 3) return alert("Necesitas mínimo 3 puntos.");
+
       const id = document.getElementById("newId").value.trim();
       if (!id) return alert("Falta el ID.");
 
@@ -581,7 +803,48 @@ function renderEditLotsPanel(){
       lotesGeo.features.push(feature);
       rerenderLotesLayer_Edit();
       clearDraw();
+
+      // Avanza lista si está activa
+      bulkConsume("lots");
+      bulkFillCreateFields("lots");
+
       alert(`Lote creado en memoria. Copia el GeoJSON y pégalo en ${currentSection.lotesFile}`);
+    };
+
+    rerenderLotesLayer_Edit();
+  };
+
+  document.getElementById("btnBulk").onclick = () => {
+    editor.mode = "edit";
+    stopEditingSelected();
+    clearDraw();
+
+    $editBody.innerHTML = renderBulkLoader("lots");
+
+    document.getElementById("bulkLoadBtn").onclick = () => {
+      const txt = document.getElementById("bulkText").value;
+      bulk.lots.items = parseLotList(txt);
+      bulk.lots.idx = 0;
+      alert(`Lista cargada: ${bulk.lots.items.length} lotes`);
+      renderEditLotsPanel();
+    };
+
+    document.getElementById("bulkClearBtn").onclick = () => {
+      bulk.lots.items = [];
+      bulk.lots.idx = 0;
+      bulk.lots.enabled = false;
+      alert("Lista borrada.");
+      renderEditLotsPanel();
+    };
+
+    document.getElementById("bulkToggleBtn").onclick = () => {
+      bulk.lots.enabled = !bulk.lots.enabled;
+      renderEditLotsPanel();
+    };
+
+    document.getElementById("bulkSkipBtn").onclick = () => {
+      if (bulk.lots.idx < bulk.lots.items.length) bulk.lots.idx += 1;
+      renderEditLotsPanel();
     };
 
     rerenderLotesLayer_Edit();
@@ -598,9 +861,7 @@ function renderEditLotsPanel(){
     }
   };
 
-  document.getElementById("btnExit").onclick = () => {
-    location.href = "./";
-  };
+  document.getElementById("btnExit").onclick = () => location.href = "./";
 
   document.getElementById("btnModeEdit").click();
 }
@@ -708,10 +969,7 @@ async function selectSection_Normal(feature){
   $sectionSelect.value = props.id || "";
 
   const temp = L.geoJSON(feature);
-  const b = temp.getBounds().pad(0.15);
-
-  // Animación de zoom suave (PASO 2)
-  flyToBoundsSmooth(b, 0.75);
+  flyToBoundsSmooth(temp.getBounds().pad(0.15), 0.75);
 
   await loadLotes_Normal();
 }
@@ -734,10 +992,7 @@ async function loadLotes_Normal(){
 
   lotesLayer = L.geoJSON(lotesGeo, {
     interactive: true,
-    style: (feature) => {
-      const st = feature?.properties?.estatus;
-      return lotBaseStyle(st);
-    },
+    style: (feature) => lotBaseStyle(feature?.properties?.estatus),
     onEachFeature: (feature, layer) => {
       const id = feature?.properties?.id || "(sin id)";
       const st = feature?.properties?.estatus;
@@ -750,7 +1005,6 @@ async function loadLotes_Normal(){
       });
 
       layer.on("click", () => {
-        // fijar (pin)
         if (pinnedLotLayer && pinnedLotLayer !== layer){
           const prevStatus = pinnedLotLayer.feature?.properties?.estatus;
           pinnedLotLayer.setStyle(lotBaseStyle(prevStatus));
@@ -761,9 +1015,7 @@ async function loadLotes_Normal(){
         layer.setStyle(base);
         pulseLayer(layer, base, { weightAdd: 2, fillAdd: 0.10, ms: 200 });
 
-        // Animación de zoom suave al lote (PASO 2)
-        const b = layer.getBounds().pad(0.35);
-        flyToBoundsSmooth(b, 0.45);
+        flyToBoundsSmooth(layer.getBounds().pad(0.35), 0.45);
 
         showLote(id, feature.properties);
       });
@@ -817,8 +1069,7 @@ function setupSearch_Normal(){
       return;
     }
 
-    const b = layer.getBounds().pad(0.35);
-    flyToBoundsSmooth(b, 0.45);
+    flyToBoundsSmooth(layer.getBounds().pad(0.35), 0.45);
 
     if (pinnedLotLayer && pinnedLotLayer !== layer){
       const prevStatus = pinnedLotLayer.feature?.properties?.estatus;
@@ -880,6 +1131,7 @@ async function main(){
       if ($toggleLotsBtn) $toggleLotsBtn.disabled = true;
       if ($searchBtn) $searchBtn.disabled = true;
 
+      // cargar secciones para dropdown
       seccionesGeo = await loadJson(SECCIONES_URL);
       $sectionSelect.innerHTML = `<option value="">Selecciona sección...</option>`;
       seccionesGeo.features.forEach(f => {
@@ -893,6 +1145,7 @@ async function main(){
 
       setPanel("Edición: LOTES", `<p>Selecciona una sección arriba.</p>`);
 
+      // cuando elijan sección, cargar lotes y levantar panel editor
       $sectionSelect.onchange = async () => {
         const sid = $sectionSelect.value;
         if (!sid){
