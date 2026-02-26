@@ -2,5 +2,9 @@
   "PAQ-JARDIN-STD": {
     "nombre": "Paquete Jardín Estándar",
     "items": ["Lote", "Apertura/Cierre", "Administración"]
+  },
+  "ORO": {
+    "nombre": "Paquete ORO",
+    "items": ["Servicio de concierge", "Asistente familiar", "Director funerario","Ceremonia religiosa","30 rosas de la memoria","Musica en vivo durante el servicio","Camino de flores","Catering especial para 50 personas","Servicio de café para 50 personas","Ceremonia del último adiós","50 tarjetas para condolencias","Esquela digital","3 toldos y 50 sillas"]
   }
 }
