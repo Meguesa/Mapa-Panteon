@@ -24,7 +24,7 @@ let paquetesInfo = {};
 
 // GeoJSON en memoria (para copiar actualizado)
 let seccionesGeo = null;      // FeatureCollection
-let lotesGeo = null;          // FeatureCollection de la sección seleccionada (en edit lots)
+let lotesGeo = null;          // FeatureCollection de la sección seleccionada (en edit lots / normal)
 
 // layers
 let seccionesLayer = null;
@@ -72,6 +72,44 @@ function xyToLatLng(xy){ return L.latLng(xy[1], xy[0]); }
 
 function isSameLatLng(a,b){
   return a && b && Math.abs(a.lat-b.lat) < 1e-9 && Math.abs(a.lng-b.lng) < 1e-9;
+}
+
+/* =========================================================
+   ANIMACIONES (PASO 2)
+   ========================================================= */
+function flyToBoundsSmooth(bounds, durationSeconds){
+  // "bounds" ya puede venir con .pad(...)
+  try {
+    if (map.flyToBounds){
+      map.flyToBounds(bounds, {
+        animate: true,
+        duration: durationSeconds,
+        easeLinearity: 0.2
+      });
+    } else {
+      map.fitBounds(bounds, { animate: true });
+    }
+  } catch {
+    map.fitBounds(bounds);
+  }
+}
+
+function pulseLayer(layer, baseStyle, pulseAdd){
+  // pulseAdd: { weightAdd, fillAdd, ms }
+  const ms = pulseAdd?.ms ?? 220;
+  const weightAdd = pulseAdd?.weightAdd ?? 2;
+  const fillAdd = pulseAdd?.fillAdd ?? 0.12;
+
+  const pulseStyle = {
+    ...baseStyle,
+    weight: (baseStyle.weight ?? 1) + weightAdd,
+    fillOpacity: Math.min(0.85, (baseStyle.fillOpacity ?? 0) + fillAdd)
+  };
+
+  layer.setStyle(pulseStyle);
+  setTimeout(() => {
+    try { layer.setStyle(baseStyle); } catch {}
+  }, ms);
 }
 
 /* =========================================================
@@ -260,11 +298,9 @@ function stopEditingSelected(){
 }
 
 function getRingLatLngsFromPolygonLayer(layer){
-  // layer.getLatLngs() => [ [LatLng, ...] ]
   const latlngs = layer.getLatLngs();
   const ring = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
 
-  // quitar cierre repetido si existe
   if (ring.length >= 2 && isSameLatLng(ring[0], ring[ring.length-1])) {
     return ring.slice(0, ring.length-1);
   }
@@ -273,7 +309,7 @@ function getRingLatLngsFromPolygonLayer(layer){
 
 function ringToGeoJsonCoords(ringLatLng){
   const coords = ringLatLng.map(latLngToXY);
-  if (coords.length) coords.push(coords[0]); // cierre
+  if (coords.length) coords.push(coords[0]);
   return [coords];
 }
 
@@ -337,10 +373,8 @@ function startEditingLayer(layer){
     if (editor.selectedFeature && editor.originalGeometry){
       editor.selectedFeature.geometry = deepCopy(editor.originalGeometry);
 
-      // aplicar al layer
       const coords = editor.selectedFeature.geometry.coordinates?.[0] || [];
       let ringLatLng = coords.map(xyToLatLng);
-      // quitar cierre repetido
       if (ringLatLng.length >= 2 && isSameLatLng(ringLatLng[0], ringLatLng[ringLatLng.length-1])) ringLatLng.pop();
 
       editor.selectedLayer.setLatLngs([ringLatLng]);
@@ -398,7 +432,6 @@ function renderEditSectionsPanel(){
     editor.mode = "edit";
     clearDraw();
     $editBody.innerHTML = `<p><b>Editar:</b> haz clic en una sección para mover sus puntos.</p>`;
-    // secciones deben ser clickeables
     rerenderSeccionesLayer_Edit();
   };
 
@@ -443,7 +476,6 @@ function renderEditSectionsPanel(){
       alert("Sección creada en memoria. Copia el GeoJSON y pégalo en data/secciones.geojson");
     };
 
-    // en create, las secciones NO deben robar clicks (para que el click caiga al mapa)
     rerenderSeccionesLayer_Edit();
   };
 
@@ -461,7 +493,6 @@ function renderEditSectionsPanel(){
     location.href = "./";
   };
 
-  // default
   document.getElementById("btnModeEdit").click();
 }
 
@@ -553,7 +584,6 @@ function renderEditLotsPanel(){
       alert(`Lote creado en memoria. Copia el GeoJSON y pégalo en ${currentSection.lotesFile}`);
     };
 
-    // en create, los lotes NO deben robar clicks
     rerenderLotesLayer_Edit();
   };
 
@@ -572,7 +602,6 @@ function renderEditLotsPanel(){
     location.href = "./";
   };
 
-  // default
   document.getElementById("btnModeEdit").click();
 }
 
@@ -585,7 +614,6 @@ function rerenderSeccionesLayer_Edit(){
 
   seccionesLayer = L.geoJSON(seccionesGeo, {
     style: { weight: 2, opacity: 1, fillOpacity: 0.06 },
-    // si estamos creando, que NO bloquee clicks del mapa
     interactive: (editor.mode === "edit"),
     onEachFeature: (feature, layer) => {
       const nombre = feature?.properties?.nombre || feature?.properties?.id;
@@ -607,7 +635,6 @@ function rerenderLotesLayer_Edit(){
       const s = styleByStatus(st);
       return { ...s, fillOpacity: 0.10 };
     },
-    // si estamos creando, que NO bloquee clicks del mapa
     interactive: (editor.mode === "edit"),
     onEachFeature: (feature, layer) => {
       const id = feature?.properties?.id;
@@ -660,7 +687,11 @@ async function loadSecciones_Normal(){
           pinnedSectionLayer.setStyle(sectionHiddenStyle());
         }
         pinnedSectionLayer = layer;
-        layer.setStyle(sectionPinnedStyle());
+
+        const base = sectionPinnedStyle();
+        layer.setStyle(base);
+        pulseLayer(layer, base, { weightAdd: 2, fillAdd: 0.10, ms: 220 });
+
         await selectSection_Normal(feature);
       });
     }
@@ -677,7 +708,10 @@ async function selectSection_Normal(feature){
   $sectionSelect.value = props.id || "";
 
   const temp = L.geoJSON(feature);
-  map.fitBounds(temp.getBounds().pad(0.15));
+  const b = temp.getBounds().pad(0.15);
+
+  // Animación de zoom suave (PASO 2)
+  flyToBoundsSmooth(b, 0.75);
 
   await loadLotes_Normal();
 }
@@ -716,12 +750,21 @@ async function loadLotes_Normal(){
       });
 
       layer.on("click", () => {
+        // fijar (pin)
         if (pinnedLotLayer && pinnedLotLayer !== layer){
           const prevStatus = pinnedLotLayer.feature?.properties?.estatus;
           pinnedLotLayer.setStyle(lotBaseStyle(prevStatus));
         }
         pinnedLotLayer = layer;
-        layer.setStyle(lotPinnedStyle(st));
+
+        const base = lotPinnedStyle(st);
+        layer.setStyle(base);
+        pulseLayer(layer, base, { weightAdd: 2, fillAdd: 0.10, ms: 200 });
+
+        // Animación de zoom suave al lote (PASO 2)
+        const b = layer.getBounds().pad(0.35);
+        flyToBoundsSmooth(b, 0.45);
+
         showLote(id, feature.properties);
       });
     }
@@ -774,7 +817,8 @@ function setupSearch_Normal(){
       return;
     }
 
-    map.fitBounds(layer.getBounds().pad(0.25));
+    const b = layer.getBounds().pad(0.35);
+    flyToBoundsSmooth(b, 0.45);
 
     if (pinnedLotLayer && pinnedLotLayer !== layer){
       const prevStatus = pinnedLotLayer.feature?.properties?.estatus;
@@ -783,7 +827,11 @@ function setupSearch_Normal(){
 
     pinnedLotLayer = layer;
     const st = layer.feature?.properties?.estatus;
-    layer.setStyle(lotPinnedStyle(st));
+
+    const base = lotPinnedStyle(st);
+    layer.setStyle(base);
+    pulseLayer(layer, base, { weightAdd: 2, fillAdd: 0.10, ms: 200 });
+
     showLote(layer.feature.properties.id, layer.feature.properties);
   };
 
@@ -799,7 +847,7 @@ async function main(){
     setPanel("Error en la página", `<p>${safe(e.message)}</p>`);
   });
 
-  map = L.map("map", { crs: L.CRS.Simple, minZoom: -3, maxZoom: 4 });
+  map = L.map("map", { crs: L.CRS.Simple, minZoom: -3, maxZoom: 6 });
 
   // catálogos
   try { lotesInfo = await loadJson(LOTES_INFO_URL); } catch { lotesInfo = {}; }
@@ -814,12 +862,10 @@ async function main(){
     L.imageOverlay(BASE_IMAGE_URL, bounds).addTo(map);
     map.fitBounds(bounds);
 
-    // Preparar handler de dibujo (solo funciona cuando editor.mode="create")
     attachDrawHandler();
 
     // EDIT: SECCIONES
     if (isEditSections){
-      // desactivar UI normal
       if ($toggleLotsBtn) $toggleLotsBtn.disabled = true;
       if ($searchBtn) $searchBtn.disabled = true;
 
@@ -834,7 +880,6 @@ async function main(){
       if ($toggleLotsBtn) $toggleLotsBtn.disabled = true;
       if ($searchBtn) $searchBtn.disabled = true;
 
-      // cargar secciones para dropdown
       seccionesGeo = await loadJson(SECCIONES_URL);
       $sectionSelect.innerHTML = `<option value="">Selecciona sección...</option>`;
       seccionesGeo.features.forEach(f => {
@@ -846,10 +891,8 @@ async function main(){
         $sectionSelect.appendChild(opt);
       });
 
-      // panel inicial
       setPanel("Edición: LOTES", `<p>Selecciona una sección arriba.</p>`);
 
-      // cuando elijan sección, cargar lotes y levantar panel editor
       $sectionSelect.onchange = async () => {
         const sid = $sectionSelect.value;
         if (!sid){
@@ -877,14 +920,12 @@ async function main(){
         rerenderLotesLayer_Edit();
         renderEditLotsPanel();
 
-        // zoom a sección
         if (f){
           const temp = L.geoJSON(f);
-          map.fitBounds(temp.getBounds().pad(0.15));
+          flyToBoundsSmooth(temp.getBounds().pad(0.15), 0.65);
         }
       };
 
-      // mostrar panel (sin sección aún)
       renderEditLotsPanel();
       return;
     }
