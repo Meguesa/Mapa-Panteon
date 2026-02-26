@@ -67,23 +67,30 @@ function showLote(id, propsFromMap){
     (lotesInfo[id]?.estatus) ||
     "desconocido";
 
-  const paqueteKey =
-    (propsFromMap?.paquete ?? lotesInfo[id]?.paquete ?? null);
+  const paqueteKeyRaw =
+    (propsFromMap?.paquete ??
+    propsFromMap?.package ??           // por si algún archivo trae "package"
+    lotesInfo[id]?.paquete ??
+    lotesInfo[id]?.package ??
+    null);
+
+  const paqueteKey = (typeof paqueteKeyRaw === "string")
+    ? paqueteKeyRaw.trim()
+    : paqueteKeyRaw;
 
   let html = `
     <p><b>ID:</b> ${safe(id)}</p>
     <p><b>Estatus:</b> ${safe(status)}</p>
   `;
 
-  if (String(status).toLowerCase() === "disponible"){
-    html += `<h3>Paquetes</h3>`;
-    if (paqueteKey && paquetesInfo[paqueteKey]){
-      const p = paquetesInfo[paqueteKey];
-      html += `<p><b>${safe(p.nombre)}</b></p>`;
-      html += `<ul>${(p.items||[]).map(it => `<li>${safe(it)}</li>`).join("")}</ul>`;
-    } else {
-      html += `<p>No hay paquete asignado todavía.</p>`;
-    }
+  if (!paqueteKey){
+    html += `<p><i>Sin paquete asignado.</i></p>`;
+  } else if (!paquetesInfo[paqueteKey]) {
+    html += `<p><b>Paquete:</b> ${safe(paqueteKey)} (no está definido en <code>data/paquetes.json</code>)</p>`;
+  } else {
+    const p = paquetesInfo[paqueteKey];
+    html += `<p><b>${safe(p.nombre)}</b></p>`;
+    html += `<ul>${(p.items||[]).map(it => `<li>${safe(it)}</li>`).join("")}</ul>`;
   }
 
   if (String(status).toLowerCase() === "ocupado"){
