@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mapa del Panteón</title>
+
+  <!-- Librería del mapa (Leaflet) desde internet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <link rel="stylesheet" href="./styles.css" />
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Mapa del Panteón</div>
+
+    <div class="search">
+      <input id="searchInput" type="text" placeholder="Buscar lote/nicho (ej. L-1411)" />
+      <button id="searchBtn">Buscar</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section id="map" class="map"></section>
+
+    <aside class="panel">
+      <h2 id="panelTitle">Selecciona un lote</h2>
+      <div id="panelBody" class="panel-body">
+        <p>Tip: puedes hacer zoom con el mouse o con dos dedos en celular.</p>
+      </div>
+    </aside>
+  </main>
+</body>
+</html>
