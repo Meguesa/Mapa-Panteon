@@ -1,8 +1,13 @@
 /* =========================================================
    CONFIG
    ========================================================= */
-const BASE_IMAGE_PUBLIC_URL = "./assets/map/base-public.webp"; // NUEVO: ligero para público
-const BASE_IMAGE_EDIT_URL   = "./assets/map/base.png";         // tu 600dpi para editar
+const BASE_IMAGE_PUBLIC_URL = "./assets/map/base-public.webp"; // ligero (público)
+const BASE_IMAGE_EDIT_URL   = "./assets/map/base.png";         // 600dpi (edición)
+
+// Tamaño del “espacio de coordenadas” en el que guardaste tus GeoJSON.
+// Debe coincidir con el tamaño real de base.png (600dpi).
+const DATA_COORD_WIDTH  = 21600;
+const DATA_COORD_HEIGHT = 14400;
 
 const SECCIONES_URL    = "./data/secciones.geojson";
 const LOTES_INFO_URL   = "./data/lotes.json";
@@ -15,10 +20,10 @@ const editMode = new URLSearchParams(location.search).get("edit"); // null | "se
 const isEditSections = editMode === "sections";
 const isEditLots     = editMode === "lots";
 
-// Base image según modo (público vs edición)
+// Base según modo
 const BASE_IMAGE_URL = (isEditSections || isEditLots) ? BASE_IMAGE_EDIT_URL : BASE_IMAGE_PUBLIC_URL;
 
-// Detectar “móvil/Tablet” (puntero grueso)
+// Detectar móvil/tablet (puntero grueso)
 const IS_MOBILE = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
 
 /* =========================================================
@@ -30,9 +35,9 @@ let map;
 let lotesInfo = {};
 let paquetesInfo = {};
 
-// GeoJSON en memoria (para copiar actualizado)
+// GeoJSON en memoria (para copiar actualizado en edit)
 let seccionesGeo = null;      // FeatureCollection
-let lotesGeo = null;          // FeatureCollection de la sección seleccionada (en edit lots / normal)
+let lotesGeo = null;          // FeatureCollection (de la sección seleccionada)
 
 // layers
 let seccionesLayer = null;
@@ -47,6 +52,10 @@ let currentSection = null; // { id, nombre, lotesFile }
 
 // toggle lotes (modo normal)
 let showAllLots = false;
+
+// Escala de coordenadas para alinear GeoJSON (600dpi) con el mapa base actual
+let COORD_SCALE_X = 1;
+let COORD_SCALE_Y = 1;
 
 // DOM
 const $title = document.getElementById("panelTitle");
@@ -83,22 +92,51 @@ function isSameLatLng(a,b){
 }
 
 /* =========================================================
+   COORD SCALE (fix para base-public)
+   ========================================================= */
+function scaleCoordsRecursive(obj, sx, sy){
+  if (Array.isArray(obj)){
+    if (obj.length === 2 && typeof obj[0] === "number" && typeof obj[1] === "number"){
+      const x = obj[0], y = obj[1];
+      return [x * sx, y * sy];
+    }
+    return obj.map(v => scaleCoordsRecursive(v, sx, sy));
+  }
+  return obj;
+}
+
+function applyCoordScaleToGeoJSON(data, sx, sy){
+  // Modifica "data" en sitio (ok para normal; en edit sx=1,sy=1 no cambia).
+  if (!data) return data;
+
+  const scaleGeom = (geom) => {
+    if (!geom || !geom.coordinates) return;
+    geom.coordinates = scaleCoordsRecursive(geom.coordinates, sx, sy);
+  };
+
+  if (data.type === "FeatureCollection"){
+    for (const f of (data.features || [])){
+      if (f && f.geometry) scaleGeom(f.geometry);
+    }
+  } else if (data.type === "Feature"){
+    if (data.geometry) scaleGeom(data.geometry);
+  } else if (data.coordinates) {
+    data.coordinates = scaleCoordsRecursive(data.coordinates, sx, sy);
+  }
+  return data;
+}
+
+/* =========================================================
    ANIMACIONES (PASO 2) - con protección móvil
    ========================================================= */
 function flyToBoundsSmooth(bounds, durationSeconds){
-  // En móvil, esto suele causar crashes con imágenes grandes: usar fitBounds directo
   if (IS_MOBILE) {
     map.fitBounds(bounds);
     return;
   }
-
   try {
     if (map.flyToBounds){
-      map.flyToBounds(bounds, {
-        animate: true,
-        duration: durationSeconds,
-        easeLinearity: 0.2
-      });
+      map.flyToBounds(bounds, { animate: true, duration: durationSeconds, easeLinearity: 0.2 });
     } else {
       map.fitBounds(bounds, { animate: true });
     }
@@ -145,19 +183,10 @@ function styleByStatus(status){
   return { weight: 1, opacity: 1, fillOpacity: 0.25 };
 }
 
-function lotHiddenStyle(){
-  return { weight: 1, opacity: 0, fillOpacity: 0 };
-}
-function lotVisibleStyle(status){
-  return styleByStatus(status);
-}
-function lotPinnedStyle(status){
-  const s = lotVisibleStyle(status);
-  return { ...s, weight: 2 };
-}
-function lotBaseStyle(status){
-  return showAllLots ? lotVisibleStyle(status) : lotHiddenStyle();
-}
+function lotHiddenStyle(){ return { weight: 1, opacity: 0, fillOpacity: 0 }; }
+function lotVisibleStyle(status){ return styleByStatus(status); }
+function lotPinnedStyle(status){ const s = lotVisibleStyle(status); return { ...s, weight: 2 }; }
+function lotBaseStyle(status){ return showAllLots ? lotVisibleStyle(status) : lotHiddenStyle(); }
 
 function updateToggleLotsButton(){
   if (!$toggleLotsBtn) return;
@@ -179,10 +208,7 @@ function applyLotsVisibility(){
    PANEL: LOTE (NORMAL)
    ========================================================= */
 function showLote(id, propsFromMap){
-  const status =
-    (propsFromMap?.estatus) ||
-    (lotesInfo[id]?.estatus) ||
-    "desconocido";
+  const status = (propsFromMap?.estatus) || (lotesInfo[id]?.estatus) || "desconocido";
 
   const paqueteKeyRaw =
     (propsFromMap?.paquete ??
@@ -242,69 +268,48 @@ function detectDelimiter(line){
   if (line.includes("|")) return "|";
   return null;
 }
-
 function splitFields(line){
   const d = detectDelimiter(line);
   if (d) return line.split(d).map(s => s.trim());
   return line.split(/\s{2,}/).map(s => s.trim());
 }
-
 function parseSectionList(text){
-  const lines = String(text || "")
-    .split(/\r?\n/)
-    .map(l => l.trim())
-    .filter(l => l.length);
-
+  const lines = String(text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const items = [];
   for (const line of lines){
     const cols = splitFields(line).filter(Boolean);
     if (!cols.length) continue;
     if (cols[0].toLowerCase() === "id") continue;
-
     const id = (cols[0] || "").trim();
     if (!id) continue;
-
     const nombre = (cols[1] || id).trim();
     items.push({ id, nombre });
   }
   return items;
 }
-
 function parseLotList(text){
-  const lines = String(text || "")
-    .split(/\r?\n/)
-    .map(l => l.trim())
-    .filter(l => l.length);
-
+  const lines = String(text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const items = [];
   for (const line of lines){
-    const cols = splitFields(line).filter(c => c !== undefined && c !== null);
+    const cols = splitFields(line);
     if (!cols.length) continue;
     if ((cols[0] || "").toLowerCase() === "id") continue;
-
     const id = (cols[0] || "").trim();
     if (!id) continue;
-
     const estatus = (cols[1] || "disponible").trim() || "disponible";
     const paquete = (cols[2] || "").trim() || null;
-
     items.push({ id, estatus, paquete });
   }
   return items;
 }
-
 function bulkStatusHTML(kind){
   const b = bulk[kind];
   const total = b.items.length;
   const left = Math.max(0, total - b.idx);
   const next = b.items[b.idx];
-
   const nextTxt = next
-    ? (kind === "sections"
-        ? `${next.id} — ${next.nombre}`
-        : `${next.id} — ${next.estatus}${next.paquete ? ` — ${next.paquete}` : ""}`)
+    ? (kind === "sections" ? `${next.id} — ${next.nombre}` : `${next.id} — ${next.estatus}${next.paquete ? ` — ${next.paquete}` : ""}`)
     : "(sin siguiente)";
-
   return `
     <div style="padding:8px;border:1px solid #eee;border-radius:10px;background:#fafafa;margin-top:10px;">
       <div><b>Lista cargada:</b> ${total} | <b>Restantes:</b> ${left}</div>
@@ -313,13 +318,11 @@ function bulkStatusHTML(kind){
     </div>
   `;
 }
-
 function bulkFillCreateFields(kind){
   const b = bulk[kind];
   if (!b.enabled) return;
   const next = b.items[b.idx];
   if (!next) return;
-
   const idEl = document.getElementById("newId");
   if (!idEl) return;
 
@@ -336,11 +339,8 @@ function bulkFillCreateFields(kind){
   }
 
   const nextEl = document.getElementById("bulkNext");
-  if (nextEl){
-    nextEl.innerHTML = bulkStatusHTML(kind);
-  }
+  if (nextEl) nextEl.innerHTML = bulkStatusHTML(kind);
 }
-
 function bulkConsume(kind){
   const b = bulk[kind];
   if (!b.enabled) return;
@@ -348,10 +348,10 @@ function bulkConsume(kind){
 }
 
 /* =========================================================
-   EDITOR (SECTIONS/LOTS): DRAW + EDIT VERTICES
+   EDITOR: DRAW + EDIT VERTICES
    ========================================================= */
 const editor = {
-  mode: "edit",                // "edit" | "create"
+  mode: "edit",
   drawPoints: [],
   drawMarkers: [],
   drawLine: null,
@@ -447,7 +447,6 @@ function ringToGeoJsonCoords(ringLatLng){
 
 function applyVertexMarkersToFeature(){
   if (!editor.selectedLayer || !editor.selectedFeature) return;
-
   const ring = editor.vertexMarkers.map(m => m.getLatLng());
   editor.selectedLayer.setLatLngs([ring]);
   editor.selectedFeature.geometry.coordinates = ringToGeoJsonCoords(ring);
@@ -533,7 +532,7 @@ function startEditingLayer(layer){
 }
 
 /* =========================================================
-   EDIT PANELS (SECTIONS / LOTS) + BULK
+   EDIT PANELS + BULK
    ========================================================= */
 function renderBulkLoader(kind){
   const dest = (kind === "sections")
@@ -866,6 +865,7 @@ function renderEditLotsPanel(){
 
 /* =========================================================
    EDIT RENDER: SECCIONES / LOTES
+   (edición siempre en base 600, sin escala)
    ========================================================= */
 function rerenderSeccionesLayer_Edit(){
   if (seccionesLayer) seccionesLayer.remove();
@@ -905,6 +905,7 @@ function rerenderLotesLayer_Edit(){
 
 /* =========================================================
    NORMAL MODE: SECCIONES → LOTES
+   (aquí sí aplicamos escala si estamos en base-public)
    ========================================================= */
 function clearLotsLayer_Normal(){
   if (lotesLayer){ lotesLayer.remove(); lotesLayer = null; }
@@ -912,7 +913,12 @@ function clearLotsLayer_Normal(){
 }
 
 async function loadSecciones_Normal(){
-  seccionesGeo = await loadJson(SECCIONES_URL);
+  // cargar RAW (600 coords)
+  const raw = await loadJson(SECCIONES_URL);
+
+  // copiar + escalar a coords del mapa base actual
+  seccionesGeo = deepCopy(raw);
+  applyCoordScaleToGeoJSON(seccionesGeo, COORD_SCALE_X, COORD_SCALE_Y);
 
   $sectionSelect.innerHTML = `<option value="">Selecciona sección...</option>`;
   seccionesGeo.features.forEach(f => {
@@ -982,11 +988,17 @@ async function loadLotes_Normal(){
 
   if (seccionesLayer) seccionesLayer.remove();
 
+  // cargar RAW (600 coords)
+  let raw;
   try {
-    lotesGeo = await loadJson(currentSection.lotesFile);
+    raw = await loadJson(currentSection.lotesFile);
   } catch {
-    lotesGeo = { type: "FeatureCollection", features: [] };
+    raw = { type: "FeatureCollection", features: [] };
   }
+
+  // copiar + escalar a coords del mapa base actual
+  lotesGeo = deepCopy(raw);
+  applyCoordScaleToGeoJSON(lotesGeo, COORD_SCALE_X, COORD_SCALE_Y);
 
   lotesLayer = L.geoJSON(lotesGeo, {
     interactive: true,
@@ -1096,15 +1108,14 @@ async function main(){
     setPanel("Error en la página", `<p>${safe(e.message)}</p>`);
   });
 
-  // PERF: preferCanvas mejora mucho cuando hay muchos polígonos
   map = L.map("map", {
     crs: L.CRS.Simple,
     minZoom: -3,
-    maxZoom: (isEditSections || isEditLots) ? 6 : 4, // público más limitado = más fluido
-    zoomAnimation: !IS_MOBILE,       // móvil: menos animación
+    maxZoom: (isEditSections || isEditLots) ? 6 : 4,
+    zoomAnimation: !IS_MOBILE,
     fadeAnimation: false,
     markerZoomAnimation: !IS_MOBILE,
-    preferCanvas: true               // clave para fluidez con muchos lotes
+    preferCanvas: true
   });
 
   try { lotesInfo = await loadJson(LOTES_INFO_URL); } catch { lotesInfo = {}; }
@@ -1116,29 +1127,34 @@ async function main(){
     const h = img.naturalHeight;
     const bounds = [[0,0],[h,w]];
 
-    // Overlay base (público ligero / edición pesado)
+    // Calcular escala contra el espacio de coords (600dpi guardado)
+    COORD_SCALE_X = w / DATA_COORD_WIDTH;
+    COORD_SCALE_Y = h / DATA_COORD_HEIGHT;
+
     L.imageOverlay(BASE_IMAGE_URL, bounds).addTo(map);
     map.fitBounds(bounds);
 
     attachDrawHandler();
 
-    // EDIT: SECCIONES
+    // EDIT: SECCIONES (usa base 600 => escala ~1)
     if (isEditSections){
       if ($toggleLotsBtn) $toggleLotsBtn.disabled = true;
       if ($searchBtn) $searchBtn.disabled = true;
 
       seccionesGeo = await loadJson(SECCIONES_URL);
-      rerenderSeccionesLayer_Edit();
+      // en edit, COORD_SCALE_X=1, así que NO escalamos; dejamos raw
       renderEditSectionsPanel();
+      rerenderSeccionesLayer_Edit();
       return;
     }
 
-    // EDIT: LOTES
+    // EDIT: LOTES (usa base 600 => escala ~1)
     if (isEditLots){
       if ($toggleLotsBtn) $toggleLotsBtn.disabled = true;
       if ($searchBtn) $searchBtn.disabled = true;
 
       seccionesGeo = await loadJson(SECCIONES_URL);
+
       $sectionSelect.innerHTML = `<option value="">Selecciona sección...</option>`;
       seccionesGeo.features.forEach(f => {
         const id = f?.properties?.id;
@@ -1188,7 +1204,7 @@ async function main(){
       return;
     }
 
-    // NORMAL
+    // NORMAL (usa base-public => escala ~0.5)
     await loadSecciones_Normal();
     setupSearch_Normal();
 
