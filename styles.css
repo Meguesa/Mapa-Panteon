@@ -36,7 +36,8 @@ body { margin: 0; font-family: system-ui, Arial, sans-serif; }
   .panel{ border-left:none; border-top:1px solid #ddd; }
 }
 
-#sectionSelect{
+#sectionSelect,
+#manzanaSelect{
   padding:8px 10px;
   border:1px solid #ccc;
   border-radius:8px;
