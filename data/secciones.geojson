@@ -31,9 +31,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "A",
         "id": "A",
-        "nombre": "A",
-        "lotesFile": "./data/lotes-A.geojson"
+        "nombre": "ORO - A",
+        "lotesFile": "./data/lotes/lotes-ORO-A.geojson"
       }
     },
     {
@@ -66,9 +68,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "B",
         "id": "B",
-        "nombre": "B",
-        "lotesFile": "./data/lotes-B.geojson"
+        "nombre": "ORO - A",
+        "lotesFile": "./data/lotes/lotes-ORO-B.geojson"
       }
     },
     {
@@ -101,9 +105,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "C",
         "id": "C",
-        "nombre": "C",
-        "lotesFile": "./data/lotes-C.geojson"
+        "nombre": "ORO - C",
+        "lotesFile": "./data/lotes/lotes-ORO-C.geojson"
       }
     },
     {
@@ -136,9 +142,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "D",
         "id": "D",
-        "nombre": "D",
-        "lotesFile": "./data/lotes-D.geojson"
+        "nombre": "ORO - D",
+        "lotesFile": "./data/lotes/lotes-ORO-D.geojson"
       }
     },
     {
@@ -171,9 +179,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "E",
         "id": "E",
-        "nombre": "E",
-        "lotesFile": "./data/lotes-E.geojson"
+        "nombre": "ORO - E",
+        "lotesFile": "./data/lotes/lotes-ORO-E.geojson"
       }
     },
     {
@@ -206,9 +216,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "F",
         "id": "F",
-        "nombre": "F",
-        "lotesFile": "./data/lotes-F.geojson"
+        "nombre": "ORO - F",
+        "lotesFile": "./data/lotes/lotes-ORO-F.geojson"
       }
     },
     {
@@ -241,9 +253,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "G",
         "id": "G",
-        "nombre": "G",
-        "lotesFile": "./data/lotes-G.geojson"
+        "nombre": "ORO - G",
+        "lotesFile": "./data/lotes/lotes-ORO-G.geojson"
       }
     },
     {
@@ -276,9 +290,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "H",
         "id": "H",
-        "nombre": "H",
-        "lotesFile": "./data/lotes-H.geojson"
+        "nombre": "ORO - H",
+        "lotesFile": "./data/lotes/lotes-ORO-H.geojson"
       }
     },
     {
@@ -311,9 +327,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "I",
         "id": "I",
-        "nombre": "I",
-        "lotesFile": "./data/lotes-I.geojson"
+        "nombre": "ORO - I",
+        "lotesFile": "./data/lotes/lotes-ORO-I.geojson"
       }
     },
     {
@@ -346,9 +364,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "J",
         "id": "J",
-        "nombre": "J",
-        "lotesFile": "./data/lotes-J.geojson"
+        "nombre": "ORO - J",
+        "lotesFile": "./data/lotes/lotes-ORO-J.geojson"
       }
     },
     {
@@ -381,9 +401,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "K",
         "id": "K",
-        "nombre": "K",
-        "lotesFile": "./data/lotes-K.geojson"
+        "nombre": "ORO - K",
+        "lotesFile": "./data/lotes/lotes-ORO-K.geojson"
       }
     },
     {
@@ -416,9 +438,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "L",
         "id": "L",
-        "nombre": "L",
-        "lotesFile": "./data/lotes-L.geojson"
+        "nombre": "ORO - L",
+        "lotesFile": "./data/lotes/lotes-ORO-L.geojson"
       }
     },
     {
@@ -451,9 +475,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "M",
         "id": "M",
-        "nombre": "M",
-        "lotesFile": "./data/lotes-M.geojson"
+        "nombre": "ORO - M",
+        "lotesFile": "./data/lotes/lotes-ORO-M.geojson"
       }
     },
     {
@@ -486,9 +512,11 @@
         ]
       },
       "properties": {
+        "seccion": "ORO",
+        "manzana": "N",
         "id": "N",
-        "nombre": "N",
-        "lotesFile": "./data/lotes-N.geojson"
+        "nombre": "ORO - N",
+        "lotesFile": "./data/lotes/lotes-ORO-N.geojson"
       }
     }
   ]
