@@ -1,7 +1,9 @@
 /* =========================================================
    CONFIG
    ========================================================= */
-const BASE_IMAGE_URL   = "./assets/map/base.png";      // tu base actual (600dpi)
+const BASE_IMAGE_PUBLIC_URL = "./assets/map/base-public.webp"; // NUEVO: ligero para público
+const BASE_IMAGE_EDIT_URL   = "./assets/map/base.png";         // tu 600dpi para editar
+
 const SECCIONES_URL    = "./data/secciones.geojson";
 const LOTES_INFO_URL   = "./data/lotes.json";
 const PAQUETES_URL     = "./data/paquetes.json";
@@ -12,6 +14,12 @@ const PAQUETES_URL     = "./data/paquetes.json";
 const editMode = new URLSearchParams(location.search).get("edit"); // null | "sections" | "lots"
 const isEditSections = editMode === "sections";
 const isEditLots     = editMode === "lots";
+
+// Base image según modo (público vs edición)
+const BASE_IMAGE_URL = (isEditSections || isEditLots) ? BASE_IMAGE_EDIT_URL : BASE_IMAGE_PUBLIC_URL;
+
+// Detectar “móvil/Tablet” (puntero grueso)
+const IS_MOBILE = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
 
 /* =========================================================
    GLOBAL STATE
@@ -75,9 +83,15 @@ function isSameLatLng(a,b){
 }
 
 /* =========================================================
-   ANIMACIONES (PASO 2)
+   ANIMACIONES (PASO 2) - con protección móvil
    ========================================================= */
 function flyToBoundsSmooth(bounds, durationSeconds){
+  // En móvil, esto suele causar crashes con imágenes grandes: usar fitBounds directo
+  if (IS_MOBILE) {
+    map.fitBounds(bounds);
+    return;
+  }
+
   try {
     if (map.flyToBounds){
       map.flyToBounds(bounds, {
@@ -226,14 +240,12 @@ function detectDelimiter(line){
   if (line.includes(",")) return ",";
   if (line.includes(";")) return ";";
   if (line.includes("|")) return "|";
-  // fallback: espacios múltiples
   return null;
 }
 
 function splitFields(line){
   const d = detectDelimiter(line);
   if (d) return line.split(d).map(s => s.trim());
-  // fallback por espacios (2+ espacios)
   return line.split(/\s{2,}/).map(s => s.trim());
 }
 
@@ -247,8 +259,6 @@ function parseSectionList(text){
   for (const line of lines){
     const cols = splitFields(line).filter(Boolean);
     if (!cols.length) continue;
-
-    // saltar header típico
     if (cols[0].toLowerCase() === "id") continue;
 
     const id = (cols[0] || "").trim();
@@ -270,8 +280,6 @@ function parseLotList(text){
   for (const line of lines){
     const cols = splitFields(line).filter(c => c !== undefined && c !== null);
     if (!cols.length) continue;
-
-    // saltar header típico
     if ((cols[0] || "").toLowerCase() === "id") continue;
 
     const id = (cols[0] || "").trim();
@@ -312,7 +320,6 @@ function bulkFillCreateFields(kind){
   const next = b.items[b.idx];
   if (!next) return;
 
-  // Solo auto-llenar si los inputs existen (estamos en Create)
   const idEl = document.getElementById("newId");
   if (!idEl) return;
 
@@ -352,10 +359,10 @@ const editor = {
   drawHandlerAttached: false,
   drawClickHandler: null,
 
-  selectedLayer: null,         // Leaflet layer
-  selectedFeature: null,       // feature object (layer.feature)
-  originalGeometry: null,      // backup
-  vertexMarkers: [],           // draggable markers
+  selectedLayer: null,
+  selectedFeature: null,
+  originalGeometry: null,
+  vertexMarkers: [],
   vertexIcon: L.divIcon({
     className: "",
     html: `<div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #111;"></div>`,
@@ -623,8 +630,6 @@ function renderEditSectionsPanel(){
     `;
 
     document.getElementById("btnClearDraw").onclick = () => clearDraw();
-
-    // Auto-llenar si la lista está activa
     bulkFillCreateFields("sections");
 
     document.getElementById("btnSaveNew").onclick = () => {
@@ -645,14 +650,12 @@ function renderEditSectionsPanel(){
       rerenderSeccionesLayer_Edit();
       clearDraw();
 
-      // Avanza lista si está activa
       bulkConsume("sections");
       bulkFillCreateFields("sections");
 
       alert("Sección creada en memoria. Copia el GeoJSON y pégalo en data/secciones.geojson");
     };
 
-    // en create, las secciones NO deben robar clicks
     rerenderSeccionesLayer_Edit();
   };
 
@@ -703,7 +706,6 @@ function renderEditSectionsPanel(){
   };
 
   document.getElementById("btnExit").onclick = () => location.href = "./";
-
   document.getElementById("btnModeEdit").click();
 }
 
@@ -780,8 +782,6 @@ function renderEditLotsPanel(){
     `;
 
     document.getElementById("btnClearDraw").onclick = () => clearDraw();
-
-    // Auto-llenar si la lista está activa
     bulkFillCreateFields("lots");
 
     document.getElementById("btnSaveNew").onclick = () => {
@@ -804,7 +804,6 @@ function renderEditLotsPanel(){
       rerenderLotesLayer_Edit();
       clearDraw();
 
-      // Avanza lista si está activa
       bulkConsume("lots");
       bulkFillCreateFields("lots");
 
@@ -862,7 +861,6 @@ function renderEditLotsPanel(){
   };
 
   document.getElementById("btnExit").onclick = () => location.href = "./";
-
   document.getElementById("btnModeEdit").click();
 }
 
@@ -1098,18 +1096,27 @@ async function main(){
     setPanel("Error en la página", `<p>${safe(e.message)}</p>`);
   });
 
-  map = L.map("map", { crs: L.CRS.Simple, minZoom: -3, maxZoom: 6 });
+  // PERF: preferCanvas mejora mucho cuando hay muchos polígonos
+  map = L.map("map", {
+    crs: L.CRS.Simple,
+    minZoom: -3,
+    maxZoom: (isEditSections || isEditLots) ? 6 : 4, // público más limitado = más fluido
+    zoomAnimation: !IS_MOBILE,       // móvil: menos animación
+    fadeAnimation: false,
+    markerZoomAnimation: !IS_MOBILE,
+    preferCanvas: true               // clave para fluidez con muchos lotes
+  });
 
-  // catálogos
   try { lotesInfo = await loadJson(LOTES_INFO_URL); } catch { lotesInfo = {}; }
   try { paquetesInfo = await loadJson(PAQUETES_URL); } catch { paquetesInfo = {}; }
 
-  // base image
   const img = new Image();
   img.onload = async () => {
     const w = img.naturalWidth;
     const h = img.naturalHeight;
     const bounds = [[0,0],[h,w]];
+
+    // Overlay base (público ligero / edición pesado)
     L.imageOverlay(BASE_IMAGE_URL, bounds).addTo(map);
     map.fitBounds(bounds);
 
@@ -1131,7 +1138,6 @@ async function main(){
       if ($toggleLotsBtn) $toggleLotsBtn.disabled = true;
       if ($searchBtn) $searchBtn.disabled = true;
 
-      // cargar secciones para dropdown
       seccionesGeo = await loadJson(SECCIONES_URL);
       $sectionSelect.innerHTML = `<option value="">Selecciona sección...</option>`;
       seccionesGeo.features.forEach(f => {
@@ -1145,7 +1151,6 @@ async function main(){
 
       setPanel("Edición: LOTES", `<p>Selecciona una sección arriba.</p>`);
 
-      // cuando elijan sección, cargar lotes y levantar panel editor
       $sectionSelect.onchange = async () => {
         const sid = $sectionSelect.value;
         if (!sid){
