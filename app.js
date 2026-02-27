@@ -9,17 +9,17 @@ const DATA_COORD_WIDTH  = 21600;
 const DATA_COORD_HEIGHT = 14400;
 
 // Archivos de datos
-const SECCIONES_TOP_URL = "./data/secciones-top.geojson"; // NUEVO: editor ?edit=secciones
-const MANZANAS_URL      = "./data/secciones.geojson";     // tu archivo actual (ahora son MANZANAS)
+const SECCIONES_TOP_URL = "./data/secciones-top.geojson"; // editor ?edit=secciones + PUBLICO secciones
+const MANZANAS_URL      = "./data/secciones.geojson";     // tu archivo actual (MANZANAS)
 
 // Catálogos
 const LOTES_INFO_URL    = "./data/lotes.json";
 const PAQUETES_URL      = "./data/paquetes.json";
 
 // Edit modes:
-// ?edit=secciones  => EDITOR SECCIONES (nuevo)
-// ?edit=manzanas   => EDITOR MANZANAS (antes ?edit=sections)
-// ?edit=lots       => EDITOR LOTES (igual)
+// ?edit=secciones  => EDITOR SECCIONES
+// ?edit=manzanas   => EDITOR MANZANAS
+// ?edit=lots       => EDITOR LOTES
 const editMode = new URLSearchParams(location.search).get("edit"); // null | "secciones" | "manzanas" | "lots"
 const isEditSecciones = editMode === "secciones";
 const isEditManzanas  = editMode === "manzanas";
@@ -43,14 +43,17 @@ let seccionesTopRaw = null;   // SECCIONES (nuevo)
 let manzanasRaw = null;       // MANZANAS
 
 // Scaled a base actual (público)
-let manzanasScaled = null;    // MANZANAS escaladas
-let lotesScaled = null;       // LOTES escalados
+let seccionesTopScaled = null; // SECCIONES escaladas
+let manzanasScaled = null;     // MANZANAS escaladas
+let lotesScaled = null;        // LOTES escalados
 
-let seccionesLayer = null;    // para editor secciones
+let seccionesLayer = null;    // editor secciones
+let seccionesLayerPublic = null; // PUBLICO secciones
 let manzanasLayer = null;     // público + editor manzanas
 let lotesLayer = null;        // público + editor lotes
 
 let currentSeccion = null;          // "ORO"
+let currentSeccionFeature = null;   // feature seleccionada (scaled, público)
 let currentManzanaFeature = null;   // feature seleccionada (scaled en público, raw en edit)
 let currentLotesRaw = null;         // lotes raw del archivo de esa manzana (en edit lotes)
 
@@ -206,7 +209,8 @@ function updateToggleLotsButton(){
    UI helpers (dropdowns)
    ========================================================= */
 function getPropSeccion(f){
-  return (f?.properties?.seccion || "SIN-SECCION").toString().trim();
+  // ahora: usa seccion o id
+  return (f?.properties?.seccion || f?.properties?.id || "SIN-SECCION").toString().trim();
 }
 function getPropManzana(f){
   return (f?.properties?.manzana || f?.properties?.id || "").toString().trim();
@@ -264,8 +268,9 @@ function featureToLayerCircleAware(feature, latlng){
 }
 
 /* =========================================================
-   ================= PÚBLICO: MANZANAS + LOTES =================
+   ================= PÚBLICO: SECCIONES → MANZANAS → LOTES =================
    ========================================================= */
+let pinnedSeccionLayer = null;
 let pinnedManzanaLayer = null;
 let pinnedLotLayer = null;
 
@@ -273,7 +278,118 @@ function clearLotesLayer(){
   if (lotesLayer){ lotesLayer.remove(); lotesLayer = null; }
 }
 
-function renderManzanasLayer(filteredFeatures){
+function clearManzanasLayer(){
+  if (manzanasLayer){ manzanasLayer.remove(); manzanasLayer = null; }
+}
+
+function clearSeccionesLayerPublic(){
+  if (seccionesLayerPublic){ seccionesLayerPublic.remove(); seccionesLayerPublic = null; }
+  pinnedSeccionLayer = null;
+}
+
+function showPublicLevelSecciones(){
+  // reset state
+  currentSeccion = null;
+  currentSeccionFeature = null;
+  currentManzanaFeature = null;
+  showAllLots = false;
+
+  $seccionSelect.value = "";
+  $manzanaSelect.innerHTML = `<option value="">MANZANA...</option>`;
+  $loteInput.value = "";
+
+  clearLotesLayer();
+  clearManzanasLayer();
+  clearSeccionesLayerPublic();
+  updateToggleLotsButton();
+
+  renderSeccionesLayerPublic();
+}
+
+function renderSeccionesLayerPublic(){
+  if (!seccionesTopScaled || !seccionesTopScaled.features || seccionesTopScaled.features.length === 0){
+    // fallback: si no hay secciones-top, volvemos al modo antiguo
+    setPanel("Sin SECCIONES", `<p>No hay secciones en <code>data/secciones-top.geojson</code>. Agrega al menos 1.</p>`);
+    return;
+  }
+
+  const fc = { type:"FeatureCollection", features: seccionesTopScaled.features };
+
+  seccionesLayerPublic = L.geoJSON(fc, {
+    style: () => hiddenStyle(),
+    pointToLayer: (feature, latlng) => {
+      const layer = featureToLayerCircleAware(feature, latlng);
+      try { layer.setStyle(hiddenStyle()); } catch {}
+      return layer;
+    },
+    onEachFeature: (feature, layer) => {
+      layer.on("mouseover", () => {
+        if (pinnedSeccionLayer !== layer) layer.setStyle(hoverStyle());
+      });
+      layer.on("mouseout", () => {
+        if (pinnedSeccionLayer !== layer) layer.setStyle(hiddenStyle());
+      });
+
+      layer.on("click", () => {
+        if (pinnedSeccionLayer && pinnedSeccionLayer !== layer){
+          pinnedSeccionLayer.setStyle(hiddenStyle());
+        }
+        pinnedSeccionLayer = layer;
+
+        const base = pinnedStyle();
+        layer.setStyle(base);
+        pulseLayer(layer, base, { ms: 220 });
+
+        selectSeccionPublic(feature, layer);
+      });
+    }
+  }).addTo(map);
+
+  setPanel("SECCIONES", `
+    <p>1) Selecciona una <b>SECCIÓN</b> en el mapa.</p>
+    <p>2) Luego seleccionarás una <b>MANZANA</b>.</p>
+    <p>3) Después un <b>LOTE</b>.</p>
+  `);
+}
+
+function selectSeccionPublic(feature, layer){
+  const sec = getPropSeccion(feature);
+  currentSeccion = sec;
+  currentSeccionFeature = feature;
+
+  $seccionSelect.value = sec;
+  $manzanaSelect.value = "";
+  $loteInput.value = "";
+
+  // zoom a sección
+  try { flyToBoundsSmooth(layer.getBounds().pad(0.10), 0.65); } catch {}
+
+  // pasar a manzanas de esta sección
+  showPublicLevelManzanas(sec);
+}
+
+function showPublicLevelManzanas(seccion){
+  currentSeccion = seccion;
+  currentManzanaFeature = null;
+  showAllLots = false;
+
+  clearLotesLayer();
+  clearManzanasLayer();
+  updateToggleLotsButton();
+
+  // ocultar secciones para no estorbar
+  clearSeccionesLayerPublic();
+
+  const manzanas = buildManzanasListBySeccion(manzanasScaled.features, seccion);
+  fillManzanaSelect(manzanas);
+
+  renderManzanasLayer(manzanas, {
+    panelTitle: `SECCIÓN ${safe(seccion)}`,
+    panelHtml: `<p>Selecciona una <b>MANZANA</b> en el mapa.</p>`
+  });
+}
+
+function renderManzanasLayer(filteredFeatures, opts){
   if (manzanasLayer){ manzanasLayer.remove(); manzanasLayer = null; }
   pinnedManzanaLayer = null;
   currentManzanaFeature = null;
@@ -312,15 +428,22 @@ function renderManzanasLayer(filteredFeatures){
     }
   }).addTo(map);
 
-  setPanel("Selección", `
-    <p>1) Elige <b>SECCIÓN</b></p>
-    <p>2) Elige <b>MANZANA</b></p>
-    <p>3) Escribe <b>LOTE</b> (opcional) y presiona Buscar</p>
-  `);
+  if (opts?.panelTitle){
+    setPanel(opts.panelTitle, opts.panelHtml || "");
+  } else {
+    setPanel("Selección", `
+      <p>1) Elige <b>SECCIÓN</b></p>
+      <p>2) Elige <b>MANZANA</b></p>
+      <p>3) Escribe <b>LOTE</b> (opcional) y presiona Buscar</p>
+    `);
+  }
 }
 
 async function selectManzana(feature, layer){
   currentManzanaFeature = feature;
+
+  // set dropdown
+  $manzanaSelect.value = getPropManzana(feature);
 
   try {
     const b = layer.getBounds ? layer.getBounds().pad(0.20) : L.latLngBounds(layer.getLatLng(), layer.getLatLng()).pad(0.20);
@@ -391,7 +514,7 @@ async function loadLotesForCurrentManzana(){
 
   updateToggleLotsButton();
 
-  const sec = getPropSeccion(currentManzanaFeature);
+  const sec = currentSeccion || getPropSeccion(currentManzanaFeature);
   const man = getPropManzana(currentManzanaFeature);
   setPanel(`SECCIÓN ${safe(sec)} — MANZANA ${safe(man)}`, `
     <p>Selecciona un lote o usa <b>Mostrar lotes</b>.</p>
@@ -405,7 +528,7 @@ function showLoteInfo(feature){
   const paqueteKey = (props.paquete || null);
 
   let html = `
-    <p><b>SECCIÓN:</b> ${safe(getPropSeccion(currentManzanaFeature))}</p>
+    <p><b>SECCIÓN:</b> ${safe(currentSeccion || getPropSeccion(currentManzanaFeature))}</p>
     <p><b>MANZANA:</b> ${safe(getPropManzana(currentManzanaFeature))}</p>
     <p><b>LOTE:</b> ${safe(loteVal)}</p>
     <p><b>Estatus:</b> ${safe(status)}</p>
@@ -457,6 +580,11 @@ function findLotLayerByInput(loteInput){
 }
 
 async function ensureManzanaSelected(sec, man){
+  // asegurar nivel MANZANAS
+  if (!currentSeccion || currentSeccion !== sec){
+    showPublicLevelManzanas(sec);
+  }
+
   if (currentManzanaFeature && getPropSeccion(currentManzanaFeature) === sec && getPropManzana(currentManzanaFeature) === man){
     if (!lotesLayer) await loadLotesForCurrentManzana();
     return;
@@ -469,7 +597,8 @@ async function ensureManzanaSelected(sec, man){
   }
 
   $seccionSelect.value = sec;
-  rebuildManzanasUIForSeccion(sec);
+  // reconstruye manzanas
+  showPublicLevelManzanas(sec);
   $manzanaSelect.value = man;
 
   currentManzanaFeature = f;
@@ -515,20 +644,12 @@ function setupSearch(){
 }
 
 /* =========================================================
-   DROPDOWNS
+   DROPDOWNS (PUBLICO)
    ========================================================= */
-function rebuildManzanasUIForSeccion(seccion){
-  currentSeccion = seccion;
-  const features = buildManzanasListBySeccion(manzanasScaled.features, seccion);
-  fillManzanaSelect(features);
-  renderManzanasLayer(features);
-
-  $loteInput.value = "";
-}
-
 function setupDropdowns(){
   $seccionSelect.onchange = () => {
     const sec = ($seccionSelect.value || "").trim();
+
     $loteInput.value = "";
     $manzanaSelect.value = "";
     currentManzanaFeature = null;
@@ -536,10 +657,11 @@ function setupDropdowns(){
     updateToggleLotsButton();
 
     if (!sec){
-      renderManzanasLayer(manzanasScaled.features);
+      showPublicLevelSecciones();
       return;
     }
-    rebuildManzanasUIForSeccion(sec);
+
+    showPublicLevelManzanas(sec);
   };
 
   $manzanaSelect.onchange = async () => {
@@ -552,19 +674,30 @@ function setupDropdowns(){
 }
 
 /* =========================================================
-   BOTONES
+   BOTONES (PUBLICO)
    ========================================================= */
 function setupButtons(){
   $backBtn.onclick = () => {
-    currentSeccion = null;
-    currentManzanaFeature = null;
-    $seccionSelect.value = "";
-    $manzanaSelect.value = "";
-    $loteInput.value = "";
-    showAllLots = false;
-    clearLotesLayer();
-    updateToggleLotsButton();
-    renderManzanasLayer(manzanasScaled.features);
+    // Si estás viendo lotes -> volver a manzanas
+    if (lotesLayer){
+      clearLotesLayer();
+      pinnedLotLayer = null;
+      currentManzanaFeature = null;
+      showAllLots = false;
+      updateToggleLotsButton();
+      if (currentSeccion) showPublicLevelManzanas(currentSeccion);
+      else showPublicLevelSecciones();
+      return;
+    }
+
+    // Si estás viendo manzanas -> volver a secciones
+    if (manzanasLayer){
+      showPublicLevelSecciones();
+      return;
+    }
+
+    // ya estás en secciones
+    showPublicLevelSecciones();
   };
 
   if ($toggleLotsBtn){
@@ -955,7 +1088,6 @@ function renderEditSeccionesPanel(){
 }
 
 function renderEditManzanasPanel(){
-  // tu editor de MANZANAS (igual que antes, solo cambió el parámetro de URL)
   editor.mode = "edit";
   editor.drawShape = "polygon";
   editorClearPoly(); editorClearCircle(); editorStopEditing();
@@ -1395,15 +1527,22 @@ async function main(){
     }
 
     // ====== NORMAL (PÚBLICO) ======
+    // Escalar ambos (secciones-top y manzanas) al tamaño de base-public
+    seccionesTopScaled = deepCopy(seccionesTopRaw);
+    applyCoordScaleToGeoJSON(seccionesTopScaled, COORD_SCALE_X, COORD_SCALE_Y);
+
     manzanasScaled = deepCopy(manzanasRaw);
     applyCoordScaleToGeoJSON(manzanasScaled, COORD_SCALE_X, COORD_SCALE_Y);
 
-    const secciones = buildSeccionesList(manzanasScaled.features);
+    // Dropdown SECCIÓN se llena con secciones-top (no con manzanas)
+    const secciones = buildSeccionesList(seccionesTopScaled.features.length ? seccionesTopScaled.features : manzanasScaled?.features || []);
     fillSeccionSelect(secciones);
-    fillManzanaSelect([]);
+    $manzanaSelect.innerHTML = `<option value="">MANZANA...</option>`;
 
-    renderManzanasLayer(manzanasScaled.features);
+    // Iniciar en nivel SECCIONES (mapa seleccionable)
+    showPublicLevelSecciones();
 
+    // Handlers
     setupDropdowns();
     setupSearch();
     setupButtons();
