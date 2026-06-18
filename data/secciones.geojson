@@ -4448,10 +4448,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A__DUP5",
-        "seccion": "PLATA",
+        "id": "BRONCE-A__DUP5",
+        "seccion": "BRONCE",
         "manzana": "A",
-        "nombre": "PLATA - A"
+        "nombre": "BRONCE - A"
       }
     },
     {
@@ -4484,10 +4484,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A__DUP6",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-E__DUP6",
+        "seccion": "BRONCE",
+        "manzana": "E",
+        "nombre": "BRONCE - E"
       }
     },
     {
@@ -4520,10 +4520,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-B__DUP5",
-        "seccion": "PLATA",
-        "manzana": "B",
-        "nombre": "PLATA - B"
+        "id": "BRONCE-D__DUP5",
+        "seccion": "BRONCE",
+        "manzana": "D",
+        "nombre": "BRONCE - D"
       }
     },
     {
@@ -4556,10 +4556,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-C__DUP5",
-        "seccion": "PLATA",
+        "id": "BRONCE-C__DUP5",
+        "seccion": "BRONCE",
         "manzana": "C",
-        "nombre": "PLATA - C"
+        "nombre": "BRONCE - C"
       }
     },
     {
@@ -4592,10 +4592,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A__DUP7",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-K__DUP7",
+        "seccion": "BRONCE",
+        "manzana": "K",
+        "nombre": "BRONCE - K"
       }
     },
     {
@@ -4628,10 +4628,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-B__DUP6",
-        "seccion": "PLATA",
-        "manzana": "B",
-        "nombre": "PLATA - B"
+        "id": "BRONCE-J__DUP6",
+        "seccion": "BRONCE",
+        "manzana": "J",
+        "nombre": "BRONCE - J"
       }
     },
     {
@@ -4664,10 +4664,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-C__DUP6",
-        "seccion": "PLATA",
-        "manzana": "C",
-        "nombre": "PLATA - C"
+        "id": "BRONCE-I__DUP6",
+        "seccion": "BRONCE",
+        "manzana": "I",
+        "nombre": "BRONCE - I"
       }
     },
     {
@@ -4700,10 +4700,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-D__DUP5",
-        "seccion": "PLATA",
-        "manzana": "D",
-        "nombre": "PLATA - D"
+        "id": "BRONCE-H__DUP5",
+        "seccion": "BRONCE",
+        "manzana": "H",
+        "nombre": "BRONCE - H"
       }
     },
     {
@@ -4736,10 +4736,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A__DUP8",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-P__DUP8",
+        "seccion": "BRONCE",
+        "manzana": "P",
+        "nombre": "BRONCE - P"
       }
     },
     {
@@ -4772,10 +4772,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-B__DUP7",
-        "seccion": "PLATA",
-        "manzana": "B",
-        "nombre": "PLATA - B"
+        "id": "BRONCE-O__DUP7",
+        "seccion": "BRONCE",
+        "manzana": "O",
+        "nombre": "BRONCE - O"
       }
     },
     {
@@ -4808,10 +4808,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-C__DUP7",
-        "seccion": "PLATA",
-        "manzana": "C",
-        "nombre": "PLATA - C"
+        "id": "BRONCE-N__DUP7",
+        "seccion": "BRONCE",
+        "manzana": "N",
+        "nombre": "BRONCE - N"
       }
     },
     {
@@ -4844,10 +4844,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A__DUP9",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-V__DUP9",
+        "seccion": "BRONCE",
+        "manzana": "V",
+        "nombre": "BRONCE - V"
       }
     },
     {
@@ -4880,10 +4880,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-B__DUP8",
-        "seccion": "PLATA",
-        "manzana": "B",
-        "nombre": "PLATA - B"
+        "id": "BRONCE-U__DUP8",
+        "seccion": "BRONCE",
+        "manzana": "U",
+        "nombre": "BRONCE - U"
       }
     },
     {
@@ -4916,10 +4916,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-C__DUP8",
-        "seccion": "PLATA",
-        "manzana": "C",
-        "nombre": "PLATA - C"
+        "id": "BRONCE-T__DUP8",
+        "seccion": "BRONCE",
+        "manzana": "T",
+        "nombre": "BRONCE - T"
       }
     },
     {
@@ -4952,10 +4952,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A__DUP10",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-S__DUP10",
+        "seccion": "BRONCE",
+        "manzana": "S",
+        "nombre": "BRONCE - S"
       }
     },
     {
@@ -4988,10 +4988,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-B__DUP9",
-        "seccion": "PLATA",
-        "manzana": "B",
-        "nombre": "PLATA - B"
+        "id": "BRONCE-R__DUP9",
+        "seccion": "BRONCE",
+        "manzana": "R",
+        "nombre": "BRONCE - R"
       }
     },
     {
@@ -5024,10 +5024,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-C__DUP9",
-        "seccion": "PLATA",
-        "manzana": "C",
-        "nombre": "PLATA - C"
+        "id": "BRONCE-Q__DUP9",
+        "seccion": "BRONCE",
+        "manzana": "Q",
+        "nombre": "BRONCE - Q"
       }
     },
     {
@@ -5060,10 +5060,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-Z",
+        "seccion": "BRONCE",
+        "manzana": "Z",
+        "nombre": "BRONCE - Z"
       }
     },
     {
@@ -5096,10 +5096,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-B",
-        "seccion": "PLATA",
-        "manzana": "B",
-        "nombre": "PLATA - B"
+        "id": "BRONCE-Y",
+        "seccion": "BRONCE",
+        "manzana": "Y",
+        "nombre": "BRONCE - Y"
       }
     },
     {
@@ -5132,10 +5132,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-C",
-        "seccion": "PLATA",
-        "manzana": "C",
-        "nombre": "PLATA - C"
+        "id": "BRONCE-X",
+        "seccion": "BRONCE",
+        "manzana": "X",
+        "nombre": "BRONCE - X"
       }
     },
     {
@@ -5168,10 +5168,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-D",
-        "seccion": "PLATA",
-        "manzana": "D",
-        "nombre": "PLATA - D"
+        "id": "BRONCE-W",
+        "seccion": "BRONCE",
+        "manzana": "W",
+        "nombre": "BRONCE - W"
       }
     },
     {
@@ -5204,10 +5204,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-M",
+        "seccion": "BRONCE",
+        "manzana": "M",
+        "nombre": "BRONCE - M"
       }
     },
     {
@@ -5240,10 +5240,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-B",
-        "seccion": "PLATA",
-        "manzana": "B",
-        "nombre": "PLATA - B"
+        "id": "BRONCE-L",
+        "seccion": "BRONCE",
+        "manzana": "L",
+        "nombre": "BRONCE - L"
       }
     },
     {
@@ -5276,10 +5276,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-G",
+        "seccion": "BRONCE",
+        "manzana": "G",
+        "nombre": "BRONCE - G"
       }
     },
     {
@@ -5312,10 +5312,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-B",
-        "seccion": "PLATA",
-        "manzana": "B",
-        "nombre": "PLATA - B"
+        "id": "BRONCE-F",
+        "seccion": "BRONCE",
+        "manzana": "F",
+        "nombre": "BRONCE - F"
       }
     },
     {
@@ -5348,10 +5348,10 @@
         ]
       },
       "properties": {
-        "id": "PLATA-A",
-        "seccion": "PLATA",
-        "manzana": "A",
-        "nombre": "PLATA - A"
+        "id": "BRONCE-B",
+        "seccion": "BRONCE",
+        "manzana": "B",
+        "nombre": "BRONCE - B"
       }
     }
   ]
