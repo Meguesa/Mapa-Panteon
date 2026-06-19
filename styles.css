@@ -1856,80 +1856,114 @@ header button:hover {
 }
 
 /* =========================================================
-   FIX FINAL - PANEL DERECHO CENTRADO
-   Botón Mostrar lotes + Resumen de manzana
+   PANEL DERECHO - LOTES / RESUMEN LIMPIO
    ========================================================= */
 
-/* El panel derecho no debe crecer fuera de sus 420px */
 body.public-map.has-section-selected .jp-side-panel,
 body.public-map.has-section-selected .panel {
   box-sizing: border-box !important;
   overflow-x: hidden !important;
 }
 
-/* Todo dentro del panel debe respetar el ancho disponible */
 body.public-map.has-section-selected .jp-side-panel *,
 body.public-map.has-section-selected .panel * {
   box-sizing: border-box !important;
 }
 
-/* Cuerpo del panel con aire lateral interno */
 body.public-map.has-section-selected #panelBody {
   width: 100% !important;
   max-width: 100% !important;
-  padding-left: 14px !important;
-  padding-right: 14px !important;
+  padding: 0 !important;
+  margin: 0 !important;
   overflow-x: hidden !important;
-  box-sizing: border-box !important;
 }
 
-/* Evita que cualquier bloque interno se salga */
-body.public-map.has-section-selected #panelBody > * {
+#panelBody .jp-lotes-panel-block {
+  width: 100% !important;
   max-width: 100% !important;
+  padding: 0 10px !important;
+  margin: 0 !important;
   box-sizing: border-box !important;
+  overflow-x: hidden !important;
 }
 
-/* Botón Mostrar lotes centrado dentro del panel */
-body.public-map.has-section-selected #panelBody #panelToggleLotsBtn {
+#panelBody .jp-panel-section-title {
+  margin: 8px 0 8px 0 !important;
+  font-size: 15px !important;
+  font-weight: 850 !important;
+  color: #0f172a !important;
+}
+
+#panelBody #panelToggleLotsBtn.jp-panel-wide-control {
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  margin-top: 0 !important;
-  margin-bottom: 10px !important;
+  margin: 0 0 12px 0 !important;
+  padding: 9px 12px !important;
+  border-radius: 12px !important;
   box-sizing: border-box !important;
-}
-
-/* Contenedor de filtros: no debe empujar el ancho */
-body.public-map.has-section-selected #panelBody div[style*="display:flex"][style*="flex-wrap:wrap"] {
-  width: 100% !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-  overflow: visible !important;
-}
-
-/* Botones de filtros: permiten wrap limpio */
-body.public-map.has-section-selected #panelBody .statusFilterBtn {
-  max-width: 100% !important;
-  box-sizing: border-box !important;
+  text-align: center !important;
   white-space: nowrap !important;
 }
 
-/* Recuadro Resumen de manzana centrado dentro del panel */
-body.public-map.has-section-selected #panelBody div[style*="border:1px solid #e5e7eb"] {
+#panelBody .jp-status-grid {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  margin: 0 0 10px 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+#panelBody .jp-status-grid .statusFilterBtn {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 8px 6px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  line-height: 1.1 !important;
+  text-align: center !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  box-sizing: border-box !important;
+}
+
+#panelBody .jp-status-grid .statusFilterBtn.is-active {
+  background: linear-gradient(135deg, #0b2545, #2563eb) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+#panelBody .jp-current-filter {
+  margin: 4px 0 10px 0 !important;
+  font-size: 12px !important;
+  color: #667085 !important;
+}
+
+#panelBody .jp-manzana-summary-card {
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  margin-top: 8px !important;
+  margin: 8px 0 0 0 !important;
+  padding: 10px 12px !important;
   box-sizing: border-box !important;
 
   background: #ffffff !important;
   border: 1px solid #eadcc6 !important;
   border-radius: 14px !important;
   box-shadow: 0 6px 18px rgba(15, 47, 79, 0.08) !important;
+  overflow-x: hidden !important;
+}
+
+#panelBody .jp-manzana-summary-card p {
+  margin: 3px 0 !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
 }
