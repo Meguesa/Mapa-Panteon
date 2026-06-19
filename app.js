@@ -920,7 +920,9 @@ function getFiltroEstatusHtml(){
     <button
       id="panelToggleLotsBtn"
       style="
-        width:100%;
+        width:calc(100% - 16px);
+        box-sizing:border-box;
+        margin:0 8px 10px 8px;
         padding:8px 10px;
         border-radius:8px;
         border:1px solid #111827;
@@ -928,7 +930,6 @@ function getFiltroEstatusHtml(){
         color:${showAllLots ? "white" : "#111827"};
         cursor:pointer;
         font-weight:700;
-        margin-bottom:10px;
       "
     >
       ${showAllLots ? "Ocultar lotes" : "Mostrar lotes"}
@@ -951,7 +952,17 @@ function getFiltroEstatusHtml(){
       Filtro actual: <b>${safe(filtroEstatusActual)}</b>
     </p>
 
-    <div style="margin-top:8px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;">
+    <div
+      style="
+        width:calc(100% - 16px);
+        box-sizing:border-box;
+        margin:8px 8px 0 8px;
+        padding:8px;
+        border:1px solid #e5e7eb;
+        border-radius:8px;
+        background:#fff;
+      "
+    >
       <p style="margin:2px 0;font-size:12px;"><b>Resumen de manzana</b></p>
       <p style="margin:2px 0;font-size:12px;">Total: <b>${safe(counts.total)}</b></p>
       <p style="margin:2px 0;font-size:12px;">Disponible: <b>${safe(counts.disponible)}</b></p>
