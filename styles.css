@@ -1855,17 +1855,81 @@ header button:hover {
   }
 }
 
-.jp-side-panel,
-.jp-side-panel * {
-  box-sizing: border-box;
+/* =========================================================
+   FIX FINAL - PANEL DERECHO CENTRADO
+   Botón Mostrar lotes + Resumen de manzana
+   ========================================================= */
+
+/* El panel derecho no debe crecer fuera de sus 420px */
+body.public-map.has-section-selected .jp-side-panel,
+body.public-map.has-section-selected .panel {
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
 }
 
-.jp-side-panel {
-  overflow-x: hidden;
+/* Todo dentro del panel debe respetar el ancho disponible */
+body.public-map.has-section-selected .jp-side-panel *,
+body.public-map.has-section-selected .panel * {
+  box-sizing: border-box !important;
 }
 
-#panelBody {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
+/* Cuerpo del panel con aire lateral interno */
+body.public-map.has-section-selected #panelBody {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Evita que cualquier bloque interno se salga */
+body.public-map.has-section-selected #panelBody > * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Botón Mostrar lotes centrado dentro del panel */
+body.public-map.has-section-selected #panelBody #panelToggleLotsBtn {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 10px !important;
+  box-sizing: border-box !important;
+}
+
+/* Contenedor de filtros: no debe empujar el ancho */
+body.public-map.has-section-selected #panelBody div[style*="display:flex"][style*="flex-wrap:wrap"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+
+/* Botones de filtros: permiten wrap limpio */
+body.public-map.has-section-selected #panelBody .statusFilterBtn {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+}
+
+/* Recuadro Resumen de manzana centrado dentro del panel */
+body.public-map.has-section-selected #panelBody div[style*="border:1px solid #e5e7eb"] {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  margin-top: 8px !important;
+  box-sizing: border-box !important;
+
+  background: #ffffff !important;
+  border: 1px solid #eadcc6 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 6px 18px rgba(15, 47, 79, 0.08) !important;
 }

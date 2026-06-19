@@ -924,14 +924,16 @@ function getFiltroEstatusHtml(){
 
   return `
     <hr/>
-    <h4 style="margin:8px 0 6px 0;">Visualización de lotes</h4>
+
+    <div class="jp-panel-lotes-section">
+      <h4 style="margin:8px 0 6px 0;">Visualización de lotes</h4>
 
     <button
       id="panelToggleLotsBtn"
+      class="jp-panel-wide-control"
       style="
         display:block;
         width:100%;
-        max-width:100%;
         box-sizing:border-box;
         margin:0 0 10px 0;
         padding:8px 10px;
@@ -943,12 +945,14 @@ function getFiltroEstatusHtml(){
         font-weight:700;
       "
     >
+
+
       ${showAllLots ? "Ocultar lotes" : "Mostrar lotes"}
     </button>
 
     <h4 style="margin:8px 0 6px 0;">Filtrar lotes por estatus</h4>
 
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;max-width:100%;box-sizing:border-box;">
       ${btn(`Todos (${counts.total})`, "todos")}
       ${btn(`Disponible (${counts.disponible})`, "disponible")}
       ${btn(`Separado (${counts.separado})`, "separado")}
@@ -964,6 +968,7 @@ function getFiltroEstatusHtml(){
     </p>
 
     <div
+      class="jp-manzana-summary-card"
       style="
         width:100%;
         max-width:100%;
@@ -975,6 +980,7 @@ function getFiltroEstatusHtml(){
         background:#fff;
       "
     >
+
       <p style="margin:2px 0;font-size:12px;"><b>Resumen de manzana</b></p>
       <p style="margin:2px 0;font-size:12px;">Total: <b>${safe(counts.total)}</b></p>
       <p style="margin:2px 0;font-size:12px;">Disponible: <b>${safe(counts.disponible)}</b></p>
@@ -988,6 +994,7 @@ function getFiltroEstatusHtml(){
         <p style="margin:2px 0;font-size:12px;">Desconocido: <b>${safe(counts.desconocido)}</b></p>
       ` : ""}
     </div>
+  </div>
   `;
 }
 
