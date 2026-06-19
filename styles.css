@@ -1854,3 +1854,18 @@ header button:hover {
     height: calc(100vh - 96px) !important;
   }
 }
+
+.jp-side-panel,
+.jp-side-panel * {
+  box-sizing: border-box;
+}
+
+.jp-side-panel {
+  overflow-x: hidden;
+}
+
+#panelBody {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}

@@ -192,9 +192,18 @@ function applyPublicLayoutMode(isPanelOpen){
       $sidePanel.style.width = "420px";
       $sidePanel.style.minWidth = "420px";
       $sidePanel.style.maxWidth = "420px";
+      $sidePanel.style.boxSizing = "border-box";
       $sidePanel.style.padding = "18px";
       $sidePanel.style.borderLeft = "1px solid #eadcc6";
       $sidePanel.style.overflowY = "auto";
+      $sidePanel.style.overflowX = "hidden";
+    }
+
+    if ($body) {
+      $body.style.width = "100%";
+      $body.style.maxWidth = "100%";
+      $body.style.boxSizing = "border-box";
+      $body.style.overflowX = "hidden";
     }
 
     if (mapEl) {
@@ -920,9 +929,11 @@ function getFiltroEstatusHtml(){
     <button
       id="panelToggleLotsBtn"
       style="
-        width:calc(100% - 16px);
+        display:block;
+        width:100%;
+        max-width:100%;
         box-sizing:border-box;
-        margin:0 8px 10px 8px;
+        margin:0 0 10px 0;
         padding:8px 10px;
         border-radius:8px;
         border:1px solid #111827;
@@ -954,9 +965,10 @@ function getFiltroEstatusHtml(){
 
     <div
       style="
-        width:calc(100% - 16px);
+        width:100%;
+        max-width:100%;
         box-sizing:border-box;
-        margin:8px 8px 0 8px;
+        margin:8px 0 0 0;
         padding:8px;
         border:1px solid #e5e7eb;
         border-radius:8px;
