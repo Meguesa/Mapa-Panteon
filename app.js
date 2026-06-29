@@ -889,15 +889,37 @@ function getLotesStatusCounts(){
 
 function getFiltroEstatusHtml(){
   const counts = getLotesStatusCounts();
+  
+  const btnBase = `
+    padding:6px 10px;
+    border-radius:8px;
+    border:1px solid #d1d5db;
+    background:white;
+    cursor:pointer;
+    font-size:12px;
+    box-sizing:border-box;
+    max-width:100%;
+  `;
+
+  const btnActive = `
+    padding:6px 10px;
+    border-radius:8px;
+    border:1px solid #111827;
+    background:#111827;
+    color:white;
+    cursor:pointer;
+    font-size:12px;
+    box-sizing:border-box;
+    max-width:100%;
+  `;
 
   function btn(label, status){
     const active = filtroEstatusActual === status;
-
     return `
       <button
-        class="statusFilterBtn ${active ? "is-active" : ""}"
+        class="statusFilterBtn"
         data-status="${safe(status)}"
-        type="button"
+        style="${active ? btnActive : btnBase}"
       >
         ${safe(label)}
       </button>
@@ -906,49 +928,80 @@ function getFiltroEstatusHtml(){
 
   return `
     <hr/>
+    <h4 style="margin:8px 0 6px 0;">Visualización de lotes</h4>
 
-    <div class="jp-lotes-panel-block">
-      <h4 class="jp-panel-section-title">Visualización de lotes</h4>
+    <button
+      id="panelToggleLotsBtn"
+      style="
+        display:block;
+        width:100%;
+        max-width:100%;
+        box-sizing:border-box;
+        margin:0 0 10px 0;
+        padding:8px 10px;
+        border-radius:8px;
+        border:1px solid #111827;
+        background:${showAllLots ? "#111827" : "white"};
+        color:${showAllLots ? "white" : "#111827"};
+        cursor:pointer;
+        font-weight:700;
+      "
+    >
+      ${showAllLots ? "Ocultar lotes" : "Mostrar lotes"}
+    </button>
 
-      <button
-        id="panelToggleLotsBtn"
-        class="jp-panel-wide-control"
-        type="button"
-      >
-        ${showAllLots ? "Ocultar lotes" : "Mostrar lotes"}
-      </button>
+    <h4 style="margin:8px 0 6px 0;">Filtrar lotes por estatus</h4>
 
-      <h4 class="jp-panel-section-title">Filtrar lotes por estatus</h4>
+    <div style="
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin-bottom:8px;
+      width:100%;
+      max-width:100%;
+      box-sizing:border-box;
+      overflow:visible;
+    ">
+      ${btn(`Todos (${counts.total})`, "todos")}
+      ${btn(`Disponible (${counts.disponible})`, "disponible")}
+      ${btn(`Separado (${counts.separado})`, "separado")}
+      ${btn(`Vendido (${counts.vendido})`, "vendido")}
+      ${btn(`Utilizado (${counts.utilizado})`, "utilizado")}
+      ${btn(`Suspendido (${counts.suspendido})`, "suspendido")}
+      ${btn(`Por construir (${counts.por_construir})`, "por_construir")}
+      ${btn(`Sin inventario (${counts.sin_inventario})`, "sin_inventario")}
+    </div>
 
-      <div class="jp-status-grid">
-        ${btn(`Todos (${counts.total})`, "todos")}
-        ${btn(`Disponible (${counts.disponible})`, "disponible")}
-        ${btn(`Separado (${counts.separado})`, "separado")}
-        ${btn(`Vendido (${counts.vendido})`, "vendido")}
-        ${btn(`Utilizado (${counts.utilizado})`, "utilizado")}
-        ${btn(`Suspendido (${counts.suspendido})`, "suspendido")}
-        ${btn(`Por construir (${counts.por_construir})`, "por_construir")}
-        ${btn(`Sin inventario (${counts.sin_inventario})`, "sin_inventario")}
-      </div>
+    <p style="margin:2px 0;font-size:12px;color:#6b7280;">
+      Filtro actual: <b>${safe(filtroEstatusActual)}</b>
+    </p>
 
-      <p class="jp-current-filter">
-        Filtro actual: <b>${safe(filtroEstatusActual)}</b>
-      </p>
-
-      <div class="jp-manzana-summary-card">
-        <p><b>Resumen de manzana</b></p>
-        <p>Total: <b>${safe(counts.total)}</b></p>
-        <p>Disponible: <b>${safe(counts.disponible)}</b></p>
-        <p>Separado: <b>${safe(counts.separado)}</b></p>
-        <p>Vendido: <b>${safe(counts.vendido)}</b></p>
-        <p>Utilizado: <b>${safe(counts.utilizado)}</b></p>
-        <p>Suspendido: <b>${safe(counts.suspendido)}</b></p>
-        <p>Por construir: <b>${safe(counts.por_construir)}</b></p>
-        <p>Sin inventario: <b>${safe(counts.sin_inventario)}</b></p>
-        ${counts.desconocido ? `
-          <p>Desconocido: <b>${safe(counts.desconocido)}</b></p>
-        ` : ""}
-      </div>
+    <div
+      style="
+        display:block;
+        width:100%;
+        max-width:100%;
+        box-sizing:border-box;
+        margin:8px 0 0 0;
+        padding:8px;
+        border:1px solid #e5e7eb;
+        border-radius:8px;
+        background:#fff;
+        overflow:hidden;
+      "
+    >
+      <p style="margin:2px 0;font-size:12px;"><b>Resumen de manzana</b></p>
+      <p style="margin:2px 0;font-size:12px;">Total: <b>${safe(counts.total)}</b></p>
+      <p style="margin:2px 0;font-size:12px;">Disponible: <b>${safe(counts.disponible)}</b></p>
+      <p style="margin:2px 0;font-size:12px;">Separado: <b>${safe(counts.separado)}</b></p>
+      <p style="margin:2px 0;font-size:12px;">Vendido: <b>${safe(counts.vendido)}</b></p>
+      <p style="margin:2px 0;font-size:12px;">Utilizado: <b>${safe(counts.utilizado)}</b></p>
+      <p style="margin:2px 0;font-size:12px;">Suspendido: <b>${safe(counts.suspendido)}</b></p>
+      <p style="margin:2px 0;font-size:12px;">Por construir: <b>${safe(counts.por_construir)}</b></p>
+      <p style="margin:2px 0;font-size:12px;">Sin inventario: <b>${safe(counts.sin_inventario)}</b></p>
+      ${counts.desconocido ? `
+        <p style="margin:2px 0;font-size:12px;">Desconocido: <b>${safe(counts.desconocido)}</b></p>
+      ` : ""}
     </div>
   `;
 }
