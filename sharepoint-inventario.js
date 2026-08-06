@@ -1,6 +1,14 @@
 (function () {
   "use strict";
 
+  const ES_PORTAL_MAPA =
+    window.location.hostname === "portal.juanpablo.com.mx" &&
+    window.location.pathname.startsWith("/mapa/");
+
+  if (!ES_PORTAL_MAPA) {
+    return;
+  }
+
   const CONFIG = {
     clientId: "a1bf32aa-d442-4cdd-967c-33b5f758d2b5",
     tenantId: "888d54c0-f785-49d1-b967-54da8b0aed94",
