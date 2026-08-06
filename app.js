@@ -170,6 +170,20 @@ function refreshMapSizeSoon(){
   }, 80);
 }
 
+function getMapaTopOffset(){
+  const layout = document.querySelector(".layout");
+  if (!layout) return 0;
+
+  const rect = layout.getBoundingClientRect();
+
+  return Math.max(0, Math.round(rect.top));
+}
+
+function getMapaLayoutHeight(){
+  const topOffset = getMapaTopOffset();
+  return `calc(100vh - ${topOffset}px)`;
+}
+
 function applyPublicLayoutMode(isPanelOpen){
   if (IS_EDIT) return;
 
@@ -183,7 +197,7 @@ function applyPublicLayoutMode(isPanelOpen){
       layout.style.display = "grid";
       layout.style.gridTemplateColumns = "minmax(0, 1fr) 420px";
       layout.style.gridTemplateRows = "1fr";
-      layout.style.height = "calc(100vh - var(--topbar-h, 52px))";
+      layout.style.height = getMapaLayoutHeight();
       layout.style.overflow = "hidden";
     }
 
@@ -208,7 +222,7 @@ function applyPublicLayoutMode(isPanelOpen){
       layout.style.display = "grid";
       layout.style.gridTemplateColumns = "minmax(0, 1fr)";
       layout.style.gridTemplateRows = "1fr";
-      layout.style.height = "calc(100vh - var(--topbar-h, 52px))";
+      layout.style.height = getMapaLayoutHeight();
       layout.style.overflow = "hidden";
     }
 
@@ -228,6 +242,10 @@ function applyPublicLayoutMode(isPanelOpen){
     }
   }
 
+  try {
+    window.scrollTo(0, 0);
+  } catch {}
+   
   refreshMapSizeSoon();
 
   setTimeout(() => {
