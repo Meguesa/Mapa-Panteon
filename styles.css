@@ -1854,3 +1854,52 @@ header button:hover {
     height: calc(100vh - 96px) !important;
   }
 }
+
+/* =========================================================
+   FIX HEADER PORTAL + MAPA
+   Evita que el mapa empuje/oculte el encabezado superior
+   ========================================================= */
+
+html,
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  min-height: 100% !important;
+  overflow-x: hidden !important;
+}
+
+/* La página no debe scrollear horizontalmente ni dejar que Leaflet empuje el header */
+body.public-map {
+  overflow: hidden !important;
+}
+
+/* El layout del mapa usa la altura calculada por app.js */
+body.public-map .layout {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* El mapa siempre se limita a su contenedor */
+body.public-map #map,
+body.public-map .map {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Asegura que el header blanco quede encima del mapa */
+header,
+.topbar,
+.portal-header,
+.site-header,
+.navbar {
+  position: relative !important;
+  z-index: 3000 !important;
+}
+
+/* Leaflet no debe quedar por encima del encabezado */
+.leaflet-container {
+  z-index: 1 !important;
+}
