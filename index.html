@@ -364,6 +364,15 @@
   <!-- Microsoft Authentication Library -->
   <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
   
+  <!-- Respaldo oficial de MSAL en otra región de Microsoft -->
+  <script>
+    if (typeof window.msal === "undefined") {
+      document.write(
+        '<script src="https://alcdn.msftauth.net/browser/2.38.3/js/msal-browser.min.js"><\/script>'
+      );
+    }
+  </script>
+  
   <!-- Inventario dinámico desde SharePoint -->
   <script src="./sharepoint-inventario.js?v=20260806a"></script>
     
