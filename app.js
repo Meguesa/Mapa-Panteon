@@ -1501,32 +1501,127 @@ function nichosRender(){
   nichosUI.$img.src = imgUrl;
 }
 
+function getNichoInventoryItem(feature, zonaFeature = null){
+  const p = feature?.properties || {};
+
+  const zonaId =
+    p.zonaId ||
+    p.columbarioId ||
+    nichosZonaId(zonaFeature || nichosUI.zona);
+
+  const cara =
+    p.cara ||
+    nichosUI.cara;
+
+  const codigo =
+    p.codigo ||
+    p.id ||
+    '';
+
+  if (!zonaId || !cara || !codigo) {
+    return null;
+  }
+
+  const k = keyNicho(zonaId, cara, codigo);
+
+  return inventarioOverrides[k] || inventarioBase[k] || null;
+}
+
 function nichosRenderNichoInfo(feature){
   const p = feature?.properties || {};
   const codigo = (p.codigo || p.id || '(sin código)').toString();
-  const estatus = (p.estatus || '').toString().trim() || 'desconocido';
+
+  const inventario = getNichoInventoryItem(feature, nichosUI.zona);
+
+  const estatus = normStatus(
+    inventario?.estatus ||
+    p.estatus ||
+    'desconocido'
+  );
+
   const paqueteKey = nichosGetPaqueteKey(feature, nichosUI.zona);
 
-  if (nichosUI.$sel) nichosUI.$sel.textContent = codigo;
+  if (nichosUI.$sel) {
+    nichosUI.$sel.textContent = codigo;
+  }
 
   let html = `<h3 style="margin:0 0 6px 0;">Nicho: ${safe(codigo)}</h3>`;
-  html += `<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">Columbario → Cara → Nicho</div>`;
+
+  html += `
+    <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">
+      Columbário → Cara → Nicho
+    </div>
+  `;
+
   html += `<p><b>Estatus:</b> ${safe(estatus)}</p>`;
 
+  if (inventario) {
+    if (inventario.referencia_procap) {
+      html += `<p><b>Referencia ProCaP:</b> ${safe(inventario.referencia_procap)}</p>`;
+    }
+
+    if (inventario.estatus_venta) {
+      html += `<p><b>Estatus de venta:</b> ${safe(inventario.estatus_venta)}</p>`;
+    }
+
+    if (inventario.estatus_ocupacion) {
+      html += `<p><b>Estatus de ocupación:</b> ${safe(inventario.estatus_ocupacion)}</p>`;
+    }
+
+    if (Number(inventario.capacidad_cenizas) > 0) {
+      html += `
+        <p>
+          <b>Uso de cenizas:</b>
+          ${safe(inventario.usos_cenizas || 0)}
+          de
+          ${safe(inventario.capacidad_cenizas)}
+        </p>
+      `;
+    }
+
+    if (inventario.finado) {
+      html += `<p><b>Finado:</b> ${safe(inventario.finado)}</p>`;
+    }
+
+    if (inventario.observaciones) {
+      html += `<p><b>Observaciones:</b> ${safe(inventario.observaciones)}</p>`;
+    }
+  } else {
+    html += `
+      <p style="font-size:12px;color:#b45309;">
+        No se encontró coincidencia de este nicho en el inventario.
+      </p>
+    `;
+  }
+
   html += `<h3 style="margin:14px 0 6px 0;">Paquete</h3>`;
+
   if (!paqueteKey){
     html += `<p><i>Sin paquete asignado.</i></p>`;
   } else if (!paquetesInfo?.[paqueteKey]){
-    html += `<p><b>${safe(paqueteKey)}</b> (no definido en <code>data/paquetes.json</code>)</p>`;
+    html += `
+      <p>
+        <b>${safe(paqueteKey)}</b>
+        (no definido en <code>data/paquetes.json</code>)
+      </p>
+    `;
   } else {
     const paquete = paquetesInfo[paqueteKey];
+
     html += `<p><b>${safe(paquete.nombre || paqueteKey)}</b></p>`;
+
     if (Array.isArray(paquete.items) && paquete.items.length){
-      html += `<ul>${paquete.items.map(it => `<li>${safe(it)}</li>`).join('')}</ul>`;
+      html += `
+        <ul>
+          ${paquete.items.map(it => `<li>${safe(it)}</li>`).join('')}
+        </ul>
+      `;
     }
   }
 
-  if (nichosUI.$info) nichosUI.$info.innerHTML = html;
+  if (nichosUI.$info) {
+    nichosUI.$info.innerHTML = html;
+  }
 }
 
 // Normaliza las manzanas para que no queden inconsistencias tipo:
