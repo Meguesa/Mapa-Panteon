@@ -349,7 +349,16 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-function safe(v){ return (v === null || v === undefined) ? "" : String(v); }
+function safe(v){
+  const s = (v === null || v === undefined) ? "" : String(v);
+
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 function clamp(v, a, b){
   const x = Number(v);
@@ -1501,6 +1510,33 @@ function nichosRender(){
   nichosUI.$img.src = imgUrl;
 }
 
+function getNichoLegacyInventoryCode(codigo, zonaId = ""){
+  const code = normInv(codigo);
+  const zone = normInv(zonaId);
+
+  if (!code) {
+    return "";
+  }
+
+  const prefix = zone ? `${zone}-` : "";
+
+  const rest =
+    prefix && code.startsWith(prefix)
+      ? code.slice(prefix.length)
+      : code;
+
+  const match = rest.match(/^0*(\d+)-([A-Z0-9]+)$/);
+
+  if (!match) {
+    return "";
+  }
+
+  const numero = Number(match[1]);
+  const manzana = match[2];
+
+  return `${manzana}${numero}`;
+}
+
 function getNichoInventoryItem(feature, zonaFeature = null){
   const p = feature?.properties || {};
 
@@ -1522,9 +1558,29 @@ function getNichoInventoryItem(feature, zonaFeature = null){
     return null;
   }
 
-  const k = keyNicho(zonaId, cara, codigo);
-
-  return inventarioOverrides[k] || inventarioBase[k] || null;
+   const k = keyNicho(zonaId, cara, codigo);
+   
+   const exactMatch =
+     inventarioOverrides[k] ||
+     inventarioBase[k];
+   
+   if (exactMatch) {
+     return exactMatch;
+   }
+   
+   const legacyCodigo = getNichoLegacyInventoryCode(codigo, zonaId);
+   
+   if (!legacyCodigo) {
+     return null;
+   }
+   
+   const legacyKey = keyNicho(zonaId, cara, legacyCodigo);
+   
+   return (
+     inventarioOverrides[legacyKey] ||
+     inventarioBase[legacyKey] ||
+     null
+   );
 }
 
 function nichosRenderNichoInfo(feature){
