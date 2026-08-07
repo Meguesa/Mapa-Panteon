@@ -234,17 +234,41 @@
     return occupancyStatus || usageStatus || "desconocido";
   }
 
+  function buildNichoCodigo(fields) {
+    const seccion = text(fields.ZonaId || fields.Seccion).toUpperCase();
+    const manzana = text(fields.Manzana).toUpperCase();
+    const codigoRaw = text(fields.Codigo);
+  
+    if (!seccion || !codigoRaw || !manzana) {
+      return text(fields.Clave_Busqueda_Principal || fields.Title);
+    }
+  
+    const codigoNumerico = /^\d+$/.test(codigoRaw)
+      ? String(Number(codigoRaw)).padStart(2, "0")
+      : codigoRaw.toUpperCase();
+  
+    return `${seccion}-${codigoNumerico}-${manzana}`;
+  }
+  
   function mapItem(graphItem) {
     const fields = graphItem && graphItem.fields ? graphItem.fields : {};
     const type = normalizeType(fields);
 
+    const zonaId = type === "nicho"
+      ? text(fields.ZonaId || fields.Seccion)
+      : text(fields.ZonaId);
+    
+    const codigo = type === "nicho"
+      ? buildNichoCodigo(fields)
+      : text(fields.Codigo || fields.Clave_Busqueda_Principal || fields.Title);
+    
     return {
       tipo: type,
       seccion: text(fields.Seccion),
       manzana: text(fields.Manzana),
-      zonaId: text(fields.ZonaId),
+      zonaId: zonaId,
       cara: text(fields.Cara),
-      codigo: text(fields.Codigo || fields.Clave_Busqueda_Principal || fields.Title),
+      codigo: codigo,
       estatus: resolveStatus(fields),
       referencia_procap: text(fields.Referencia_ProcaP),
       observaciones: text(fields.Observaciones || fields.Observacion_Automatizacion),
