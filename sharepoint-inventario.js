@@ -5,17 +5,34 @@
     window.location.hostname === "portal.juanpablo.com.mx" &&
     window.location.pathname.startsWith("/mapa/");
 
-  if (!ES_PORTAL_MAPA) {
+  const ES_LOCAL_DEV =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  const SHAREPOINT_HABILITADO = ES_PORTAL_MAPA || ES_LOCAL_DEV;
+
+  if (!SHAREPOINT_HABILITADO) {
     return;
   }
+
+  const localPath = window.location.pathname || "/";
+  const localRedirectUri = `${window.location.origin}${localPath}`;
 
   const CONFIG = {
     clientId: "a1bf32aa-d442-4cdd-967c-33b5f758d2b5",
     tenantId: "888d54c0-f785-49d1-b967-54da8b0aed94",
-    redirectUri: "https://portal.juanpablo.com.mx/mapa/",
+    redirectUri: ES_LOCAL_DEV
+      ? localRedirectUri
+      : "https://portal.juanpablo.com.mx/mapa/",
     siteId: "meguesajdjp.sharepoint.com,7d618515-ccdf-44ae-aec4-c446c915b022,deb28a80-f058-4343-87f1-e268cef2dc10",
     listId: "208b6147-b487-48f8-ba3f-97aeb1ba9021",
     scopes: ["User.Read", "Sites.Read.All"]
+  };
+
+  window.JP_INVENTORY_RUNTIME = {
+    source: "sharepoint",
+    mode: ES_LOCAL_DEV ? "localhost" : "portal",
+    redirectUri: CONFIG.redirectUri
   };
 
   const INVENTORY_FILE_SUFFIX = "/data/inventario-base.json";
@@ -216,6 +233,8 @@
   function resolveStatus(fields) {
     if (isFalse(fields.Esta_Construida)) return "por_construir";
 
+    // Uso/ocupación manda sobre venta. Una propiedad puede estar vendida y,
+    // al mismo tiempo, ya tener inhumaciones o depósitos de cenizas.
     const hasUsage = number(fields.Uso_Inhumacion) > 0 || number(fields.Usos_Cenizas) > 0;
     if (hasUsage) return "utilizado";
 
@@ -301,6 +320,7 @@
       clave_propiedad: text(fields.Clave_Propiedad),
       clave_busqueda_principal: text(fields.Clave_Busqueda_Principal),
       claves_busqueda_alternas: text(fields.Claves_Busqueda_Alternas),
+      esta_construido: !isFalse(fields.Esta_Construida),
       estatus_venta: text(fields.Estatus_Venta),
       estatus_uso: text(fields.Estatus_Uso),
       estatus_ocupacion: text(fields.Estatus_Ocupacion),
@@ -401,15 +421,22 @@
       }
 
       const inventory = await inventoryPromise;
+      window.JP_INVENTORY_RUNTIME.source = "sharepoint";
+      window.JP_INVENTORY_RUNTIME.updatedAt = inventory.updatedAt;
       console.info(`[Mapa] Inventario cargado desde SharePoint: ${inventory.items.length} registros.`);
       return inventoryResponse(inventory);
     } catch (error) {
       inventoryPromise = null;
+      window.JP_INVENTORY_RUNTIME.source = "fallback-json";
+      window.JP_INVENTORY_RUNTIME.error = error && error.message ? error.message : String(error || "");
       console.error("[Mapa] No se pudo cargar el inventario de SharePoint. Se usará el respaldo JSON.", error);
 
       try {
         if (typeof window.toast === "function") {
-          window.toast("No fue posible consultar SharePoint. Se cargará el respaldo temporal.", 4500);
+          const localHint = ES_LOCAL_DEV
+            ? " Verifica que http://localhost esté registrado como Redirect URI de la app en Entra ID."
+            : "";
+          window.toast(`No fue posible consultar SharePoint. Se cargará el respaldo temporal.${localHint}`, 6500);
         }
       } catch {}
 
