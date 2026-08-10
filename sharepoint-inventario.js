@@ -236,10 +236,10 @@
 
   function buildNichoCodigo(fields) {
     const seccion = text(fields.ZonaId || fields.Seccion).toUpperCase();
-    const manzana = text(fields.Manzana).toUpperCase();
+    const manzanaRaw = text(fields.Manzana).toUpperCase();
     const codigoRaw = text(fields.Codigo);
   
-    if (!seccion || !codigoRaw || !manzana) {
+    if (!seccion || !codigoRaw || !manzanaRaw) {
       return text(fields.Clave_Busqueda_Principal || fields.Title);
     }
   
@@ -247,7 +247,30 @@
       ? String(Number(codigoRaw)).padStart(2, "0")
       : codigoRaw.toUpperCase();
   
-    return `${seccion}-${codigoNumerico}-${manzana}`;
+    let manzanaMapa = manzanaRaw;
+  
+    /*
+     * SharePoint maneja nichos como:
+     *   Codigo = 1
+     *   Manzana = A1
+     *
+     * El GeoJSON del mapa los identifica como:
+     *   PLN-01-A
+     *
+     * Si la parte numérica de Manzana coincide con Codigo,
+     * utilizamos solamente la parte alfabética.
+     */
+    const manzanaMatch = manzanaRaw.match(/^([A-Z]+)0*(\d+)$/);
+  
+    if (
+      manzanaMatch &&
+      /^\d+$/.test(codigoRaw) &&
+      Number(manzanaMatch[2]) === Number(codigoRaw)
+    ) {
+      manzanaMapa = manzanaMatch[1];
+    }
+  
+    return `${seccion}-${codigoNumerico}-${manzanaMapa}`;
   }
   
   function mapItem(graphItem) {
