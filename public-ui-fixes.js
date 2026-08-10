@@ -11,7 +11,7 @@
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      /* Header publico: la barra azul cubre todo el ancho. */
+      /* Header publico: titulo a la izquierda y controles cargados a la derecha. */
       body.public-map > header {
         width: 100% !important;
         max-width: none !important;
@@ -20,21 +20,78 @@
 
       @media (min-width: 901px) {
         body.public-map > header {
+          flex-wrap: nowrap !important;
           justify-content: flex-start !important;
         }
 
         body.public-map > header .title {
-          margin-right: 8px !important;
+          margin-right: 16px !important;
+          white-space: nowrap !important;
+          flex: 0 0 auto !important;
         }
 
         body.public-map > header .controls {
-          margin-left: 0 !important;
+          margin-left: auto !important;
           width: auto !important;
           max-width: none !important;
+          min-width: 0 !important;
+          flex: 0 1 auto !important;
+          justify-content: flex-end !important;
+          flex-wrap: nowrap !important;
+        }
+      }
+
+      .jp-status-legend {
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .jp-status-legend-title {
+        margin: 0 0 8px 0;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .jp-status-legend-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px 10px;
+      }
+
+      .jp-status-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-size: 12px;
+      }
+
+      .jp-status-legend-swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid rgba(17, 24, 39, 0.45);
+        flex: 0 0 14px;
+      }
+
+      @media (max-width: 520px) {
+        .jp-status-legend-grid {
+          grid-template-columns: 1fr;
         }
       }
     `;
     document.head.appendChild(style);
+  }
+
+  function setPublicTitle() {
+    try {
+      const title = document.querySelector('body.public-map > header .title');
+      if (title) title.textContent = 'Mapa del Panteón Jardines de Juan Pablo';
+      document.title = 'Mapa del Panteón Jardines de Juan Pablo';
+    } catch (_) {}
   }
 
   function normalizeSectionName(value) {
@@ -146,13 +203,30 @@
 
     if (!code || !lote || !manzana) return item;
 
+    const vipName = `${code} - ${lote} - ${manzana}`;
+
     return {
       ...item,
       seccion: section,
       manzana,
       codigo: lote,
-      referencia_procap: `${code} - ${lote} - ${manzana}`
+      displayName: vipName,
+      referencia_procap: vipName
     };
+  }
+
+  function applyVipManzanaNames(features) {
+    for (const feature of (features || [])) {
+      const p = feature && feature.properties ? feature.properties : null;
+      if (!p) continue;
+
+      const section = p.seccion || '';
+      const manzana = p.manzana || p.manzanaId || '';
+      const code = vipSectionCode(section);
+
+      if (!code || !manzana) continue;
+      p.nombre = `${code} - ${String(manzana).trim()}`;
+    }
   }
 
   function appendInventoryDetailsToFicha(item) {
@@ -194,6 +268,42 @@
       ${rows.join('')}
     `;
     backBtn.parentElement.insertBefore(details, backBtn);
+  }
+
+  function statusLegendHtml() {
+    const statuses = [
+      ['disponible', 'Disponible'],
+      ['separado', 'Separado'],
+      ['vendido', 'Vendido'],
+      ['utilizado', 'Utilizado'],
+      ['suspendido', 'Suspendido'],
+      ['por_construir', 'Por construir'],
+      ['sin_inventario', 'Sin inventario']
+    ];
+
+    const items = statuses.map(function (entry) {
+      const status = entry[0];
+      const label = entry[1];
+      let style = {};
+      try { style = styleByStatus(status) || {}; } catch (_) {}
+      const fill = style.fillColor || style.color || '#9ca3af';
+      const border = style.color || fill;
+      const dash = style.dashArray ? 'border-style:dashed;' : '';
+
+      return `
+        <div class="jp-status-legend-item">
+          <span class="jp-status-legend-swatch" style="background:${safe(fill)};border-color:${safe(border)};${dash}"></span>
+          <span>${safe(label)}</span>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="jp-status-legend">
+        <div class="jp-status-legend-title">Colores de disponibilidad</div>
+        <div class="jp-status-legend-grid">${items}</div>
+      </div>
+    `;
   }
 
   function featureBounds(feature) {
@@ -292,8 +402,6 @@
           const center = lotBounds.getCenter();
           const previousSnap = map.options.zoomSnap;
 
-          // Leaflet redondea por defecto a niveles enteros. Desactivamos el snap
-          // solo al calcular este movimiento para lograr un aumento visual real de 50%.
           map.options.zoomSnap = 0;
           try {
             map.flyTo(center, targetZoom, {
@@ -351,6 +459,16 @@
 
     if (!ready) return false;
     window[INSTALL_FLAG] = true;
+    setPublicTitle();
+
+    /* Etiquetas de manzana VIP: SAN JUAN VIP - A -> SJV - A. */
+    if (typeof renderManzanasLayer === 'function') {
+      const originalRenderManzanasLayer = renderManzanasLayer;
+      renderManzanasLayer = function (filteredFeatures, opts) {
+        try { applyVipManzanaNames(filteredFeatures); } catch (_) {}
+        return originalRenderManzanasLayer(filteredFeatures, opts);
+      };
+    }
 
     /*
       La ficha usa primero el catalogo. Si no existe, se construye con el
@@ -369,6 +487,30 @@
         const result = originalShowFicha(item, feature);
         try { appendInventoryDetailsToFicha(item); } catch (_) {}
         return result;
+      };
+    }
+
+    /* Al entrar a una manzana, los lotes se muestran coloreados desde el inicio. */
+    if (typeof loadLotesForCurrentManzana === 'function') {
+      const originalLoadLotesForCurrentManzana = loadLotesForCurrentManzana;
+      loadLotesForCurrentManzana = async function () {
+        try { showAllLots = true; } catch (_) {}
+        const result = await originalLoadLotesForCurrentManzana.apply(this, arguments);
+        try {
+          showAllLots = true;
+          updateToggleLotsButton();
+          applyFiltroEstatusToLotes();
+          refreshManzanaPanel();
+        } catch (_) {}
+        return result;
+      };
+    }
+
+    /* Leyenda de colores usando exactamente la paleta del mapa. */
+    if (typeof getFiltroEstatusHtml === 'function') {
+      const originalGetFiltroEstatusHtml = getFiltroEstatusHtml;
+      getFiltroEstatusHtml = function () {
+        return originalGetFiltroEstatusHtml.apply(this, arguments) + statusLegendHtml();
       };
     }
 
@@ -539,7 +681,7 @@
       }, true);
     }
 
-    console.info('[Mapa Panteon] Ajustes publicos instalados: header completo, ficha desde inventario, VIP ProcaP y zoom jerarquico.');
+    console.info('[Mapa Panteon] Ajustes publicos instalados: header alineado, VIP abreviado, lotes visibles, leyenda, ficha y zoom jerarquico.');
     return true;
   }
 
