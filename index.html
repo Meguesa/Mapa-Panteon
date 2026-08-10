@@ -390,13 +390,19 @@
     };
   </script>
 
-  <!-- Loader anti-cache para app.js -->
+  <!-- Loader anti-cache para app.js + ajustes públicos -->
   <script>
     (function () {
       window.APP_VERSION = String(Date.now());
       var s = document.createElement("script");
       s.src = "./app.js?v=" + encodeURIComponent(window.APP_VERSION);
       s.defer = true;
+
+      s.onload = function () {
+        var fixes = document.createElement("script");
+        fixes.src = "./public-ui-fixes.js?v=" + encodeURIComponent(window.APP_VERSION);
+        document.body.appendChild(fixes);
+      };
 
       s.onerror = function () {
         document.getElementById("panelTitle").textContent = "Error";
