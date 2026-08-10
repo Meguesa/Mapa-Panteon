@@ -3,6 +3,7 @@
 
   const STYLE_ID = 'jp-public-ui-fixes-style';
   const INSTALL_FLAG = '__jpPublicUiFixesInstalled';
+  const LOT_ZOOM_SCALE = 1.5; // 50% mas grande que el encuadre de la manzana.
 
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -10,13 +11,15 @@
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      /* Header publico: apenas mayor que su contenido, no de extremo a extremo. */
+      /* Header publico: la barra azul cubre todo el ancho. */
+      body.public-map > header {
+        width: 100% !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
+      }
+
       @media (min-width: 901px) {
         body.public-map > header {
-          width: max-content !important;
-          max-width: calc(100vw - 16px) !important;
-          padding-left: 14px !important;
-          padding-right: 14px !important;
           justify-content: flex-start !important;
         }
 
@@ -49,7 +52,10 @@
     const known = {
       'SAN JUAN VIP': 'SJV',
       'SAN MATEO VIP': 'SMV',
-      'SAN PEDRO VIP': 'SPV'
+      'SAN PEDRO VIP': 'SPV',
+      'SJV': 'SJV',
+      'SMV': 'SMV',
+      'SPV': 'SPV'
     };
 
     if (known[sec]) return known[sec];
@@ -65,27 +71,129 @@
     return initials ? `${initials}V` : null;
   }
 
+  function getFeatureIdentity(feature, item) {
+    const p = feature && feature.properties ? feature.properties : {};
+    let section = '';
+    let manzana = '';
+    let lote = '';
+
+    try {
+      section = currentSeccion || p.seccion || (item && item.seccion) || getPropSeccion(currentManzanaFeature) || '';
+      manzana = p.manzana || p.manzanaId || getPropManzana(currentManzanaFeature) || (item && item.manzana) || '';
+      lote = p.lote || p.id || p.codigo || (item && item.codigo) || '';
+    } catch (_) {
+      section = p.seccion || (item && item.seccion) || '';
+      manzana = p.manzana || p.manzanaId || (item && item.manzana) || '';
+      lote = p.lote || p.id || p.codigo || (item && item.codigo) || '';
+    }
+
+    return {
+      section: String(section || '').trim(),
+      manzana: String(manzana || '').trim(),
+      lote: String(lote || '').trim()
+    };
+  }
+
+  function inventoryCatalogItem(feature) {
+    let inv = null;
+    try {
+      if (typeof getLoteInventoryItem === 'function') {
+        inv = getLoteInventoryItem(feature);
+      }
+    } catch (_) {}
+
+    if (!inv) return null;
+
+    const identity = getFeatureIdentity(feature, inv);
+    const section = identity.section || inv.seccion || '';
+    const manzana = identity.manzana || inv.manzana || '';
+    const lote = identity.lote || inv.codigo || '';
+
+    let id = inv.clave_propiedad || inv.id || '';
+    try {
+      if (!id && typeof makeCatalogLoteId === 'function') {
+        id = makeCatalogLoteId(section, manzana, lote);
+      }
+    } catch (_) {}
+    if (!id) id = `LOTE-${section}-${manzana}-${lote}`;
+
+    let status = inv.estatus || '';
+    try {
+      if (!status && typeof getLoteStatus === 'function') status = getLoteStatus(feature);
+    } catch (_) {}
+
+    return {
+      ...inv,
+      id,
+      displayName: inv.displayName || `${section} - ${lote} - ${manzana}`,
+      tipo: inv.tipo || 'lote',
+      seccion: section,
+      manzana,
+      codigo: lote,
+      estatus: status,
+      observaciones: inv.observaciones || ''
+    };
+  }
+
   function correctedVipCatalogItem(item, feature) {
     if (!item) return item;
 
-    let section = item.seccion || '';
-    let manzana = item.manzana || '';
-    let lote = item.codigo || '';
-
-    try {
-      const p = feature && feature.properties ? feature.properties : {};
-      section = section || p.seccion || currentSeccion || getPropSeccion(currentManzanaFeature);
-      manzana = manzana || p.manzana || p.manzanaId || getPropManzana(currentManzanaFeature);
-      lote = lote || p.lote || p.codigo || p.id || '';
-    } catch (_) {}
-
+    const identity = getFeatureIdentity(feature, item);
+    const section = identity.section || item.seccion || '';
+    const manzana = identity.manzana || item.manzana || '';
+    const lote = identity.lote || item.codigo || '';
     const code = vipSectionCode(section);
+
     if (!code || !lote || !manzana) return item;
 
     return {
       ...item,
-      referencia_procap: `${code} - ${String(lote).trim()} - ${String(manzana).trim()}`
+      seccion: section,
+      manzana,
+      codigo: lote,
+      referencia_procap: `${code} - ${lote} - ${manzana}`
     };
+  }
+
+  function appendInventoryDetailsToFicha(item) {
+    if (!item) return;
+
+    const backBtn = document.getElementById('backToLoteInfoBtn');
+    if (!backBtn || !backBtn.parentElement) return;
+    if (document.getElementById('jpInventoryFichaDetails')) return;
+
+    const rows = [];
+    const capInh = Number(item.capacidad_inhumaciones);
+    const useInh = Number(item.uso_inhumacion);
+    const capCen = Number(item.capacidad_cenizas);
+    const useCen = Number(item.usos_cenizas);
+
+    if (Number.isFinite(capInh) && capInh > 0) {
+      rows.push(`<p style="margin:2px 0;"><b>Inhumaciones:</b> ${Number.isFinite(useInh) ? useInh : 0} / ${capInh}</p>`);
+    }
+    if (Number.isFinite(capCen) && capCen > 0) {
+      rows.push(`<p style="margin:2px 0;"><b>Cenizas:</b> ${Number.isFinite(useCen) ? useCen : 0} / ${capCen}</p>`);
+    }
+    if (item.finado) {
+      rows.push(`<p style="margin:2px 0;"><b>Finado:</b> ${safe(item.finado)}</p>`);
+    }
+    if (item.fecha_actualizacion) {
+      rows.push(`<p style="margin:2px 0;"><b>Actualizacion:</b> ${safe(item.fecha_actualizacion)}</p>`);
+    }
+    if (item.fuente_ultima_actualizacion) {
+      rows.push(`<p style="margin:2px 0;"><b>Fuente:</b> ${safe(item.fuente_ultima_actualizacion)}</p>`);
+    }
+
+    if (!rows.length) return;
+
+    const details = document.createElement('div');
+    details.id = 'jpInventoryFichaDetails';
+    details.innerHTML = `
+      <hr/>
+      <h4 style="margin:4px 0;">Informacion actualizada</h4>
+      ${rows.join('')}
+    `;
+    backBtn.parentElement.insertBefore(details, backBtn);
   }
 
   function featureBounds(feature) {
@@ -131,11 +239,9 @@
     const opts = options || {};
     const kind = opts.kind || 'normal';
     const duration = Number(opts.duration || 0.5);
-    const prepared = kind === 'lot'
-      ? bounds.pad(0.50)
-      : (kind === 'section' || kind === 'manzana')
-        ? bounds.pad(0.04)
-        : bounds;
+    const prepared = (kind === 'section' || kind === 'manzana')
+      ? bounds.pad(0.04)
+      : bounds;
 
     clearTimeout(pendingFocusTimer);
     pendingFocusTimer = window.setTimeout(function () {
@@ -154,6 +260,54 @@
           }
         } catch (_) {
           try { map.fitBounds(prepared); } catch (_) {}
+        }
+      });
+    }, 95);
+  }
+
+  function focusLotFiftyPercent(lotBounds, duration) {
+    if (!lotBounds || typeof map === 'undefined' || !map) return;
+
+    clearTimeout(pendingFocusTimer);
+    pendingFocusTimer = window.setTimeout(function () {
+      try { map.invalidateSize(true); } catch (_) {}
+
+      window.requestAnimationFrame(function () {
+        try {
+          const manzanaBounds = featureBounds(currentManzanaFeature);
+          let parentZoom = null;
+
+          if (manzanaBounds && typeof map.getBoundsZoom === 'function') {
+            parentZoom = map.getBoundsZoom(manzanaBounds.pad(0.04), false);
+          }
+
+          if (!Number.isFinite(parentZoom)) parentZoom = Number(map.getZoom());
+          if (!Number.isFinite(parentZoom)) return;
+
+          const zoomDelta = Math.log(LOT_ZOOM_SCALE) / Math.log(2);
+          const maxZoom = Number(map.getMaxZoom());
+          const targetZoom = Number.isFinite(maxZoom)
+            ? Math.min(maxZoom, parentZoom + zoomDelta)
+            : parentZoom + zoomDelta;
+          const center = lotBounds.getCenter();
+          const previousSnap = map.options.zoomSnap;
+
+          // Leaflet redondea por defecto a niveles enteros. Desactivamos el snap
+          // solo al calcular este movimiento para lograr un aumento visual real de 50%.
+          map.options.zoomSnap = 0;
+          try {
+            map.flyTo(center, targetZoom, {
+              animate: true,
+              duration: Number(duration || 0.4),
+              easeLinearity: 0.2
+            });
+          } finally {
+            map.options.zoomSnap = previousSnap;
+          }
+        } catch (_) {
+          try {
+            map.panTo(lotBounds.getCenter(), { animate: true });
+          } catch (_) {}
         }
       });
     }, 95);
@@ -198,17 +352,23 @@
     if (!ready) return false;
     window[INSTALL_FLAG] = true;
 
-    /* Referencia ProcaP VIP: SECCION_ABREV - LOTE - MANZANA. */
+    /*
+      La ficha usa primero el catalogo. Si no existe, se construye con el
+      inventario que ya alimenta el estatus del lote (SharePoint en portal).
+    */
     const originalGetCatalogItem = getCatalogoItemForLoteFeature;
     getCatalogoItemForLoteFeature = function (feature) {
-      const item = originalGetCatalogItem(feature);
+      const item = originalGetCatalogItem(feature) || inventoryCatalogItem(feature);
       return correctedVipCatalogItem(item, feature);
     };
 
     if (typeof showFichaPropiedad === 'function') {
       const originalShowFicha = showFichaPropiedad;
       showFichaPropiedad = function (catalogItem, feature) {
-        return originalShowFicha(correctedVipCatalogItem(catalogItem, feature), feature);
+        const item = correctedVipCatalogItem(catalogItem || inventoryCatalogItem(feature), feature);
+        const result = originalShowFicha(item, feature);
+        try { appendInventoryDetailsToFicha(item); } catch (_) {}
+        return result;
       };
     }
 
@@ -216,7 +376,7 @@
       Zoom jerarquico:
       - SECCION: encuadra toda la seccion despues del reflow del panel.
       - MANZANA: encuadra toda la manzana.
-      - LOTE: ocupa aprox. 50% de la vista (bounds.pad(0.50)).
+      - LOTE: aumenta la escala solo 50% respecto al encuadre de la manzana.
     */
     const originalFlyToBoundsSmooth = flyToBoundsSmooth;
     flyToBoundsSmooth = function (bounds, durationSeconds, maxZoom) {
@@ -232,15 +392,10 @@
               }
             } catch (_) {}
 
-            if (!lotBounds && bounds) {
-              // El app actual ya manda pad(0.30/0.35); este ajuste lo lleva a ~50% de pantalla.
-              try { lotBounds = bounds.pad(0.10); } catch (_) { lotBounds = bounds; }
-              focusBoundsAfterLayout(lotBounds, { kind: 'full', duration: 0.4 });
-              return;
-            }
+            if (!lotBounds && bounds) lotBounds = bounds;
 
             if (lotBounds) {
-              focusBoundsAfterLayout(lotBounds, { kind: 'lot', duration: 0.4 });
+              focusLotFiftyPercent(lotBounds, 0.4);
               return;
             }
           }
@@ -279,7 +434,7 @@
           else if (layer.feature) bounds = featureBounds(layer.feature);
 
           if (bounds) {
-            focusBoundsAfterLayout(bounds, { kind: 'lot', duration: 0.4 });
+            focusLotFiftyPercent(bounds, 0.4);
             return;
           }
         }
@@ -384,7 +539,7 @@
       }, true);
     }
 
-    console.info('[Mapa Panteon] Ajustes publicos instalados: header compacto, VIP ProcaP y zoom jerarquico.');
+    console.info('[Mapa Panteon] Ajustes publicos instalados: header completo, ficha desde inventario, VIP ProcaP y zoom jerarquico.');
     return true;
   }
 
