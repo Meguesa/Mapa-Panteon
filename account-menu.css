@@ -1,0 +1,115 @@
+.account-menu {
+  position: relative;
+  justify-self: end;
+  z-index: 50;
+}
+
+.account-menu > summary { list-style: none; }
+.account-menu > summary::-webkit-details-marker { display: none; }
+
+.account-trigger {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #fff;
+  background: var(--jp-brown, #3a1109);
+  border: 3px solid rgba(253, 187, 45, .55);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 5px 14px rgba(58, 17, 9, .18);
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.account-trigger:hover,
+.account-trigger:focus-visible,
+.account-menu[open] .account-trigger {
+  color: var(--jp-brown, #3a1109);
+  background: var(--jp-gold, #fdbb2d);
+  box-shadow: 0 8px 18px rgba(58, 17, 9, .22);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.account-trigger svg {
+  width: 23px;
+  height: 23px;
+  display: block;
+}
+
+.account-menu-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(300px, calc(100vw - 28px));
+  padding: 16px;
+  color: var(--jp-text, #241d19);
+  background: #fff;
+  border: 1px solid var(--jp-border, #e8e1d8);
+  border-top: 4px solid var(--jp-gold, #fdbb2d);
+  border-radius: 5px 5px 12px 12px;
+  box-shadow: 0 18px 42px rgba(58, 17, 9, .18);
+}
+
+.account-menu-panel::before {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: -10px;
+  width: 16px;
+  height: 16px;
+  background: var(--jp-gold, #fdbb2d);
+  transform: rotate(45deg);
+  z-index: -1;
+}
+
+.account-menu-info {
+  padding: 2px 2px 14px;
+  border-bottom: 1px solid var(--jp-border, #e8e1d8);
+}
+
+.account-menu-info strong,
+.account-menu-info span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.account-menu-info strong {
+  color: var(--jp-brown, #3a1109);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.account-menu-info span {
+  margin-top: 5px;
+  color: var(--jp-muted, #6d655f);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.account-menu-logout {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 13px;
+  padding: 0 15px;
+  color: #fff;
+  background: var(--jp-brown, #3a1109);
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.account-menu-logout:hover,
+.account-menu-logout:focus-visible {
+  color: var(--jp-brown, #3a1109);
+  background: var(--jp-gold, #fdbb2d);
+  outline: none;
+}
+
+@media (max-width: 720px) {
+  .account-menu { justify-self: center; }
+}
