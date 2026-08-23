@@ -145,12 +145,132 @@
     `);
   }
 
+  function installHoverTooltipStyles() {
+    if (document.getElementById("jp-map-hover-tooltip-style")) return;
+
+    const style = document.createElement("style");
+    style.id = "jp-map-hover-tooltip-style";
+    style.textContent = `
+      body.mapa-page .leaflet-tooltip-pane {
+        z-index: 700 !important;
+        pointer-events: none !important;
+      }
+      body.mapa-page .leaflet-tooltip.map-hover-center-label {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        background: rgba(255,255,255,0.96) !important;
+        color: #111827 !important;
+        border: 2px solid rgba(17,24,39,0.18) !important;
+        border-radius: 999px !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.20) !important;
+        padding: 8px 14px !important;
+        font-size: 15px !important;
+        font-weight: 800 !important;
+        line-height: 1.2 !important;
+        white-space: nowrap !important;
+        pointer-events: none !important;
+      }
+      body.mapa-page .leaflet-tooltip.map-hover-center-label::before {
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function getHoverLabel(feature, kind) {
+    const props = feature?.properties || {};
+
+    if (kind === "seccion") {
+      return String(props.nombre || props.label || getPropSeccion(feature) || "").trim();
+    }
+
+    return String(props.nombre || props.label || getPropManzana(feature) || "").trim();
+  }
+
+  function bindTooltipsToGroup(group, kind) {
+    if (!group || typeof group.eachLayer !== "function") return;
+
+    try {
+      group.eachLayer(function (layer) {
+        if (!layer || typeof layer.bindTooltip !== "function") return;
+
+        const label = getHoverLabel(layer.feature, kind);
+        if (!label) return;
+
+        if (layer.__jpHoverTooltipLabel === label && layer.__jpHoverTooltipKind === kind) return;
+
+        try { layer.unbindTooltip(); } catch {}
+
+        layer.bindTooltip(safe(label), {
+          permanent: false,
+          sticky: true,
+          direction: "top",
+          offset: [0, -10],
+          opacity: 1,
+          interactive: false,
+          className: `map-hover-center-label map-hover-center-label-${kind}`
+        });
+
+        layer.__jpHoverTooltipLabel = label;
+        layer.__jpHoverTooltipKind = kind;
+      });
+    } catch {}
+  }
+
+  function bindCurrentHoverTooltips() {
+    try {
+      if (typeof seccionesLayerPublic !== "undefined" && seccionesLayerPublic) {
+        bindTooltipsToGroup(seccionesLayerPublic, "seccion");
+      }
+    } catch {}
+
+    try {
+      if (typeof manzanasLayer !== "undefined" && manzanasLayer) {
+        bindTooltipsToGroup(manzanasLayer, "manzana");
+      }
+    } catch {}
+  }
+
+  function installHoverTooltips() {
+    installHoverTooltipStyles();
+
+    // Desactivamos el tooltip manual anterior para evitar duplicados.
+    try {
+      showHoverNameTooltip = function () {};
+      clearHoverNameTooltip = function () {};
+    } catch {}
+
+    try {
+      const originalRenderSecciones = renderSeccionesLayerPublic;
+      renderSeccionesLayerPublic = function () {
+        const result = originalRenderSecciones.apply(this, arguments);
+        bindCurrentHoverTooltips();
+        return result;
+      };
+    } catch {}
+
+    try {
+      const originalRenderManzanas = renderManzanasLayer;
+      renderManzanasLayer = function () {
+        const result = originalRenderManzanas.apply(this, arguments);
+        bindCurrentHoverTooltips();
+        return result;
+      };
+    } catch {}
+
+    // La capa inicial de secciones puede haber sido creada antes de cargar este archivo.
+    bindCurrentHoverTooltips();
+  }
+
   function installEnhancements() {
     if (window.__portalMapaEnhancementsInstalled) return;
     window.__portalMapaEnhancementsInstalled = true;
 
     const originalFlyToBoundsSmooth = flyToBoundsSmooth;
     const originalShowLoteInfo = showLoteInfo;
+
+    installHoverTooltips();
 
     flyToBoundsSmooth = function (bounds, durationSeconds, maxZoom = null) {
       let effectiveMaxZoom = maxZoom;
@@ -246,7 +366,7 @@
       focusFullMap(originalFlyToBoundsSmooth);
     };
 
-    console.info("[Mapa] Mejoras del Portal activadas: barra compacta, ficha VIP y navegación por niveles.");
+    console.info("[Mapa] Mejoras del Portal activadas: barra compacta, ficha VIP, navegación por niveles y etiquetas hover.");
   }
 
   function waitForApp() {
