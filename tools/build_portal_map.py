@@ -218,7 +218,8 @@ def build_index() -> None:
         <details class="account-menu">
           <summary class="account-trigger" aria-label="Abrir menú de usuario" title="<?= $name ?>">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4 1.79-4 4 1.79 4 4 4Zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4Z"/>
+              <circle cx="12" cy="8" r="4" fill="currentColor" />
+              <path fill="currentColor" d="M4 21v-1c0-3.4 3.6-6 8-6s8 2.6 8 6v1H4z" />
             </svg>
           </summary>
           <div class="account-menu-panel">
