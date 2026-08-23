@@ -14,7 +14,7 @@ jobs:
   deploy:
     name: Validar y publicar Mapa
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Descargar repositorio
@@ -42,7 +42,7 @@ jobs:
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
           rm -rf .tmp-msal
 
-      - name: Validar paquete
+      - name: Validar paquete y datos estructurales
         shell: bash
         run: |
           set -euo pipefail
@@ -59,11 +59,37 @@ jobs:
           test -s deploy/vendor/msal-browser.min.js
           test -d deploy/data
           test -d deploy/assets/nichos
+          test -s deploy/data/secciones.geojson
+          test -s deploy/data/secciones-top.geojson
+          test -s deploy/data/catalogo-propiedades.json
+          test -s deploy/data/inventario-base.json
+          test -s deploy/data/inventario-overrides.json
+          test -s deploy/data/paquetes.json
           php -l deploy/index.php
           grep -q 'Mapa del Panteón' deploy/index.php
           grep -q 'portal_require_authentication' deploy/index.php
 
-      - name: Publicar en raiz FTP exclusiva del Mapa
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          files = list(Path('deploy/data').rglob('*.json')) + list(Path('deploy/data').rglob('*.geojson'))
+          if not files:
+              raise SystemExit('No se encontraron archivos JSON/GeoJSON en deploy/data')
+
+          for path in files:
+              if path.stat().st_size == 0:
+                  raise SystemExit(f'Archivo vacio: {path}')
+              try:
+                  with path.open('r', encoding='utf-8') as fh:
+                      json.load(fh)
+              except Exception as exc:
+                  raise SystemExit(f'JSON invalido en {path}: {exc}')
+
+          print(f'Validados correctamente {len(files)} archivos JSON/GeoJSON.')
+          PY
+
+      - name: Republicar mapa completo desde cero
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: whm95.mxwebserver.com
@@ -72,8 +98,9 @@ jobs:
           protocol: ftps
           port: 21
           security: strict
-          timeout: 180000
+          timeout: 240000
           local-dir: ./deploy/
           server-dir: ./
+          dangerous-clean-slate: true
           dry-run: false
           log-level: standard
