@@ -2,25 +2,6 @@ name: Publicar Mapa independiente en cPanel
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'app.js'
-      - 'styles.css'
-      - 'index.html'
-      - 'sharepoint-inventario.js'
-      - 'public-ui-fixes.js'
-      - 'portal-integration.css'
-      - 'account-menu.css'
-      - 'mapa-enhancements.js'
-      - 'data/**'
-      - 'assets/map/**'
-      - 'assets/nichos/**'
-      - 'assets/logo.jpg'
-      - 'tools/build_portal_map.py'
-      - '.deploy-trigger'
-      - '.github/workflows/deploy-cpanel.yml'
 
 permissions:
   contents: read
