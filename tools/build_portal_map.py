@@ -36,6 +36,73 @@ def build_app_js() -> None:
         "calc(100vh - var(--topbar-h, 52px))",
         PORTAL_OVERLAY_HEIGHT,
     )
+
+    original_loader = '''async function loadJson(url){
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error(`No se pudo cargar: ${url}`);
+  return await r.json();
+}'''
+
+    robust_loader = '''async function loadJson(url){
+  const fetchJsonText = async (candidateUrl) => {
+    const response = await fetch(candidateUrl, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} al cargar ${candidateUrl}`);
+    }
+
+    const text = await response.text();
+    if (!text || !text.trim()) {
+      throw new Error(`Respuesta vacia al cargar ${candidateUrl}`);
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error(`JSON invalido en ${candidateUrl} (${text.length} bytes): ${error.message}`);
+    }
+  };
+
+  try {
+    return await fetchJsonText(url);
+  } catch (localError) {
+    const value = String(url || "");
+    let repoRelative = "";
+
+    if (value.startsWith("./data/")) {
+      repoRelative = value.slice(2);
+    } else if (value.startsWith("data/")) {
+      repoRelative = value;
+    } else {
+      const marker = "/data/";
+      const markerIndex = value.indexOf(marker);
+      if (markerIndex >= 0) {
+        repoRelative = value.slice(markerIndex + 1);
+      }
+    }
+
+    if (!repoRelative) {
+      throw localError;
+    }
+
+    const fallbackUrl = `https://raw.githubusercontent.com/Meguesa/Mapa-Panteon/main/${repoRelative}`;
+    console.warn(`[Mapa] Fallo el archivo local ${value}. Se intentara respaldo GitHub.`, localError);
+
+    try {
+      const result = await fetchJsonText(fallbackUrl);
+      console.info(`[Mapa] Datos recuperados desde GitHub: ${repoRelative}`);
+      return result;
+    } catch (fallbackError) {
+      throw new Error(
+        `No se pudo cargar ${value} localmente ni desde GitHub. Local: ${localError.message}. GitHub: ${fallbackError.message}`
+      );
+    }
+  }
+}'''
+
+    if original_loader not in source:
+        raise RuntimeError("No se encontro loadJson() esperado en app.js")
+    source = source.replace(original_loader, robust_loader, 1)
+
     (TARGET_DIR / "app.js").write_text(source, encoding="utf-8")
 
 
