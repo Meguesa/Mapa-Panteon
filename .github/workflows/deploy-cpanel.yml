@@ -58,7 +58,6 @@ jobs:
           test -s deploy/assets/map/base-public.webp
           test -s deploy/vendor/msal-browser.min.js
           test -d deploy/data
-          test -d deploy/assets/nichos
           test -s deploy/data/secciones.geojson
           test -s deploy/data/secciones-top.geojson
           test -s deploy/data/catalogo-propiedades.json
@@ -155,15 +154,15 @@ jobs:
             return 1
           }
 
-          # Las carpetas destino ya existen en /mapa/. No se ejecuta mkdir remoto,
-          # porque este servidor cPanel devuelve 550 cuando la carpeta ya existe.
           upload_block "./upload-root/" "./" "Archivos raiz"
           upload_block "./upload-data-base/" "./data/" "Datos base JSON/GeoJSON"
           upload_block "./deploy/vendor/" "./vendor/" "MSAL local"
           upload_block "./upload-assets-base/" "./assets/" "Assets base"
           upload_block "./deploy/assets/map/" "./assets/map/" "Imagen base del mapa"
-          upload_block "./deploy/assets/nichos/" "./assets/nichos/" "Imagenes de nichos"
+
+          echo "Las imagenes grandes de nichos se omiten del FTPS para evitar timeouts; no son necesarias para secciones, manzanas ni lotes."
+
           upload_block "./deploy/data/lotes/" "./data/lotes/" "Geometrias de lotes"
           upload_block "./deploy/data/nichos/" "./data/nichos/" "Datos de nichos"
 
-          echo "Publicacion completa del Mapa terminada por bloques."
+          echo "Publicacion principal del Mapa terminada por bloques."
