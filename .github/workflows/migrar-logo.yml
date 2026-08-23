@@ -1,0 +1,51 @@
+name: Migrar logo al repo del Mapa
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    name: Copiar logo y dejar Mapa autosuficiente
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Descargar Mapa-Panteon
+        uses: actions/checkout@v6
+        with:
+          path: mapa-repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Descargar fuente temporal del logo
+        uses: actions/checkout@v6
+        with:
+          repository: Meguesa/financiamiento
+          ref: main
+          path: finance-source
+
+      - name: Copiar logo al repo del Mapa
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s finance-source/assets/logo.jpg
+          mkdir -p mapa-repo/assets
+          cp finance-source/assets/logo.jpg mapa-repo/assets/logo.jpg
+          test -s mapa-repo/assets/logo.jpg
+
+      - name: Guardar logo en Mapa-Panteon
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd mapa-repo
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/logo.jpg
+          if git diff --cached --quiet; then
+            echo 'El logo ya estaba actualizado.'
+          else
+            git commit -m 'Agregar logo local para despliegue autonomo del Mapa'
+            git push origin HEAD:main
+          fi
