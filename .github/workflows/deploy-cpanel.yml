@@ -14,7 +14,7 @@ jobs:
   deploy:
     name: Validar y publicar Mapa
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Descargar repositorio
@@ -95,7 +95,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lftp
 
-      - name: Republicar mapa completo con reintentos FTPS
+      - name: Preparar bloques de publicacion
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf upload-root upload-data-base upload-assets-base
+          mkdir -p upload-root upload-data-base upload-assets-base
+
+          find deploy -maxdepth 1 -type f -exec cp -p {} upload-root/ \;
+          find deploy/data -maxdepth 1 -type f -exec cp -p {} upload-data-base/ \;
+          find deploy/assets -maxdepth 1 -type f -exec cp -p {} upload-assets-base/ \;
+
+      - name: Publicar Mapa por bloques con reintentos FTPS
         shell: bash
         env:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -103,34 +114,56 @@ jobs:
         run: |
           set -euo pipefail
 
-          for attempt in 1 2 3 4; do
-            echo "Intento FTPS ${attempt} de 4..."
+          upload_block() {
+            local local_dir="$1"
+            local remote_dir="$2"
+            local label="$3"
 
-            if lftp -u "$FTP_USERNAME","$FTP_PASSWORD" whm95.mxwebserver.com <<'LFTP'
-          set cmd:fail-exit yes
-          set net:timeout 35
-          set net:max-retries 2
-          set net:reconnect-interval-base 5
-          set net:reconnect-interval-multiplier 1
-          set ftp:passive-mode true
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set ftp:ssl-auth TLS
-          set ssl:verify-certificate yes
-          set ssl:check-hostname yes
-          mirror --reverse --delete --verbose --parallel=2 ./deploy/ ./
-          bye
-          LFTP
-            then
-              echo "Publicacion FTPS completada correctamente."
-              exit 0
+            if [ ! -d "$local_dir" ]; then
+              echo "Bloque omitido porque no existe: $label ($local_dir)"
+              return 0
             fi
 
-            if [ "$attempt" -lt 4 ]; then
-              echo "La conexion fallo. Esperando 20 segundos antes de reintentar..."
-              sleep 20
-            fi
-          done
+            for attempt in 1 2 3 4; do
+              echo "[$label] intento ${attempt} de 4..."
 
-          echo "No fue posible completar la publicacion FTPS despues de 4 intentos."
-          exit 1
+              if lftp -u "$FTP_USERNAME","$FTP_PASSWORD" whm95.mxwebserver.com -e "
+                set cmd:fail-exit yes;
+                set net:timeout 30;
+                set net:max-retries 1;
+                set net:reconnect-interval-base 5;
+                set ftp:passive-mode true;
+                set ftp:ssl-force true;
+                set ftp:ssl-protect-data true;
+                set ftp:ssl-auth TLS;
+                set ssl:verify-certificate yes;
+                set ssl:check-hostname yes;
+                mkdir -p '$remote_dir';
+                mirror --reverse --overwrite --continue --verbose --parallel=1 '$local_dir' '$remote_dir';
+                bye;
+              "; then
+                echo "[$label] publicado correctamente."
+                return 0
+              fi
+
+              if [ "$attempt" -lt 4 ]; then
+                echo "[$label] fallo de conexion. Reintento en 12 segundos..."
+                sleep 12
+              fi
+            done
+
+            echo "[$label] no pudo publicarse despues de 4 intentos."
+            return 1
+          }
+
+          # Archivos esenciales primero. No se elimina ningun archivo remoto en esta fase.
+          upload_block "./upload-root/" "./" "Archivos raiz"
+          upload_block "./upload-data-base/" "./data/" "Datos base JSON/GeoJSON"
+          upload_block "./deploy/vendor/" "./vendor/" "MSAL local"
+          upload_block "./upload-assets-base/" "./assets/" "Assets base"
+          upload_block "./deploy/assets/map/" "./assets/map/" "Imagen base del mapa"
+          upload_block "./deploy/assets/nichos/" "./assets/nichos/" "Imagenes de nichos"
+          upload_block "./deploy/data/lotes/" "./data/lotes/" "Geometrias de lotes"
+          upload_block "./deploy/data/nichos/" "./data/nichos/" "Datos de nichos"
+
+          echo "Publicacion completa del Mapa terminada por bloques."
