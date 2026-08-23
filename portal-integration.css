@@ -1,0 +1,378 @@
+:root {
+  --jp-blue: #225b8a;
+  --jp-blue-dark: #19496f;
+  --jp-brown: #3a1109;
+  --jp-gold: #fdbb2d;
+  --jp-cream: #f7f5f0;
+  --jp-surface: #ffffff;
+  --jp-text: #241d19;
+  --jp-muted: #6d655f;
+  --jp-border: #e8e1d8;
+  --portal-map-toolbar-height: 82px;
+  --portal-map-controls-height: 52px;
+  --portal-map-total-header-height: calc(var(--portal-map-toolbar-height) + var(--portal-map-controls-height));
+  --topbar-h: var(--portal-map-total-header-height);
+}
+
+html,
+body.mapa-page {
+  width: 100%;
+  min-height: 100%;
+}
+
+body.mapa-page {
+  margin: 0;
+  overflow: hidden;
+  padding-top: var(--portal-map-total-header-height) !important;
+  color: var(--jp-text);
+  background: #edf2f7;
+  font-family: "Poppins", "Montserrat", "Segoe UI", Arial, sans-serif;
+}
+
+.portal-map-toolbar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  z-index: 20050 !important;
+  min-height: var(--portal-map-toolbar-height);
+  display: flex;
+  align-items: center;
+  background: var(--jp-surface);
+  border-bottom: 3px solid var(--jp-gold);
+  box-shadow: 0 6px 20px rgba(58, 17, 9, .08);
+}
+
+.portal-map-toolbar-inner {
+  width: min(1320px, calc(100% - 36px));
+  min-height: var(--portal-map-toolbar-height);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.portal-map-title-wrap {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.portal-map-logo {
+  width: auto;
+  height: 58px;
+  flex: 0 0 auto;
+  display: block;
+  object-fit: contain;
+}
+
+.portal-map-title {
+  min-width: 0;
+}
+
+.portal-map-title strong,
+.portal-map-title span {
+  display: block;
+}
+
+.portal-map-title strong {
+  color: var(--jp-brown);
+  font-size: 21px;
+  line-height: 1.18;
+}
+
+.portal-map-title span {
+  margin-top: 4px;
+  color: var(--jp-blue);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.portal-map-context {
+  justify-self: center;
+  color: var(--jp-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.portal-map-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.portal-map-back {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  color: var(--jp-brown);
+  background: #fff;
+  border: 1px solid #d9ccc5;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.portal-map-back:hover,
+.portal-map-back:focus-visible {
+  color: var(--jp-brown);
+  background: var(--jp-gold);
+  border-color: var(--jp-gold);
+  outline: none;
+}
+
+body.mapa-page .map-controls-header {
+  position: fixed !important;
+  top: var(--portal-map-toolbar-height) !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  z-index: 20040 !important;
+  height: var(--portal-map-controls-height) !important;
+  min-height: var(--portal-map-controls-height) !important;
+  max-height: var(--portal-map-controls-height) !important;
+  flex: 0 0 var(--portal-map-controls-height) !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  overflow: visible !important;
+  padding: 5px 18px !important;
+  color: #fff !important;
+  background: var(--jp-blue) !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, .18) !important;
+  box-shadow: 0 5px 18px rgba(25, 73, 111, .18);
+}
+
+.map-controls-inner {
+  width: min(1320px, 100%);
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.map-controls-label {
+  flex: 0 0 auto;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+body.mapa-page .map-controls-header .controls {
+  min-width: 0;
+  width: 100%;
+  display: grid !important;
+  grid-template-columns: minmax(150px, .8fr) minmax(150px, .8fr) minmax(210px, 1.4fr) auto auto auto;
+  align-items: center;
+  gap: 9px !important;
+}
+
+body.mapa-page .map-controls-header select,
+body.mapa-page .map-controls-header input,
+body.mapa-page .map-controls-header button {
+  width: 100%;
+  min-width: 0 !important;
+  height: 36px !important;
+  margin: 0;
+  border-radius: 9px !important;
+  font-family: inherit;
+  font-size: 13px !important;
+}
+
+body.mapa-page .map-controls-header select,
+body.mapa-page .map-controls-header input {
+  color: #172033 !important;
+  background: #fff !important;
+  border: 1px solid rgba(255, 255, 255, .55) !important;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .10);
+}
+
+body.mapa-page .map-controls-header button {
+  padding: 0 13px !important;
+  color: var(--jp-brown) !important;
+  background: #fff !important;
+  border: 1px solid rgba(255, 255, 255, .55) !important;
+  font-weight: 800 !important;
+  white-space: nowrap;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .12);
+}
+
+body.mapa-page .map-controls-header button:hover,
+body.mapa-page .map-controls-header button:focus-visible {
+  background: var(--jp-gold) !important;
+  outline: none;
+}
+
+html body.mapa-page .layout {
+  min-height: 0;
+  height: calc(100vh - var(--portal-map-total-header-height)) !important;
+  max-height: calc(100vh - var(--portal-map-total-header-height)) !important;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  overflow: hidden;
+}
+
+html body.mapa-page.public-map:not(.has-section-selected) .layout {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html body.mapa-page .map,
+html body.mapa-page #map {
+  min-width: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+html body.mapa-page .jp-side-panel {
+  min-height: 0;
+}
+
+body.mapa-page .account-menu,
+body.mapa-page .account-menu-panel {
+  z-index: 20070 !important;
+}
+
+body.mapa-page .portal-map-toolbar .account-trigger {
+  width: 46px !important;
+  min-width: 46px !important;
+  max-width: 46px !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  max-height: 46px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  line-height: 1 !important;
+  color: #fff !important;
+  background: var(--jp-brown) !important;
+  border: 3px solid rgba(253, 187, 45, .55) !important;
+  border-radius: 50% !important;
+  box-shadow: 0 5px 14px rgba(58, 17, 9, .18) !important;
+  overflow: hidden !important;
+  flex: 0 0 46px !important;
+}
+
+body.mapa-page .portal-map-toolbar .account-trigger svg {
+  width: 23px !important;
+  min-width: 23px !important;
+  max-width: 23px !important;
+  height: 23px !important;
+  min-height: 23px !important;
+  max-height: 23px !important;
+  display: block !important;
+  flex: 0 0 23px !important;
+}
+
+body.mapa-page .portal-map-toolbar .account-trigger:hover,
+body.mapa-page .portal-map-toolbar .account-trigger:focus-visible,
+body.mapa-page .portal-map-toolbar .account-menu[open] .account-trigger {
+  color: var(--jp-brown) !important;
+  background: var(--jp-gold) !important;
+}
+
+body.mapa-page #nichosModal,
+body.mapa-page #nichosOverlayRoot,
+body.mapa-page #nichosOverlayEditor {
+  top: var(--portal-map-total-header-height) !important;
+  height: auto !important;
+  max-height: calc(100vh - var(--portal-map-total-header-height)) !important;
+}
+
+body.mapa-page #nichosModal { z-index: 19000 !important; }
+body.mapa-page #nichosOverlayRoot,
+body.mapa-page #nichosOverlayEditor { z-index: 18900 !important; }
+
+body.mapa-page .leaflet-container,
+body.mapa-page .leaflet-pane,
+body.mapa-page .leaflet-control-container {
+  z-index: auto;
+}
+
+@media (max-width: 1050px) {
+  :root {
+    --portal-map-toolbar-height: 76px;
+    --portal-map-controls-height: 76px;
+  }
+
+  .portal-map-toolbar-inner {
+    min-height: var(--portal-map-toolbar-height);
+    grid-template-columns: 1fr auto;
+  }
+
+  .portal-map-context { display: none; }
+
+  body.mapa-page .map-controls-header .controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .map-controls-label { display: none; }
+}
+
+@media (max-width: 720px) {
+  :root {
+    --portal-map-toolbar-height: 70px;
+    --portal-map-controls-height: 158px;
+  }
+
+  .portal-map-toolbar-inner {
+    width: calc(100% - 24px);
+    gap: 10px;
+  }
+
+  .portal-map-logo { height: 48px; }
+  .portal-map-title strong { font-size: 17px; }
+  .portal-map-title span { display: none; }
+
+  .portal-map-back {
+    min-height: 38px;
+    padding: 0 11px;
+    font-size: 11px;
+  }
+
+  .portal-map-actions { gap: 8px; }
+
+  body.mapa-page .portal-map-toolbar .account-trigger {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    flex-basis: 42px !important;
+  }
+
+  body.mapa-page .map-controls-header { padding: 9px 12px !important; }
+
+  body.mapa-page .map-controls-header .controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.mapa-page .map-controls-header #searchInput { grid-column: 1 / -1; }
+
+  html body.mapa-page.public-map.has-section-selected .jp-side-panel {
+    max-height: 42vh !important;
+  }
+}
+
+@media (max-width: 480px) {
+  :root { --portal-map-controls-height: 202px; }
+  .portal-map-title-wrap { gap: 8px; }
+  .portal-map-logo { height: 42px; }
+  .portal-map-title strong { font-size: 15px; }
+  .portal-map-back { padding: 0 9px; }
+
+  body.mapa-page .map-controls-header .controls {
+    grid-template-columns: 1fr 1fr;
+  }
+}
