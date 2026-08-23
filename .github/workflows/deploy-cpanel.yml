@@ -2,6 +2,12 @@ name: Publicar Mapa independiente en cPanel
 
 on:
   workflow_dispatch:
+    inputs:
+      publicar_datos_estructurales:
+        description: 'Republicar tambien GeoJSON, geometrías y activos estructurales'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -14,7 +20,7 @@ jobs:
   deploy:
     name: Validar y publicar Mapa
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 20
 
     steps:
       - name: Descargar repositorio
@@ -58,6 +64,7 @@ jobs:
           test -s deploy/assets/map/base-public.webp
           test -s deploy/vendor/msal-browser.min.js
           test -d deploy/data
+          test -s deploy/data/lotes.json
           test -s deploy/data/secciones.geojson
           test -s deploy/data/secciones-top.geojson
           test -s deploy/data/catalogo-propiedades.json
@@ -94,75 +101,97 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lftp
 
-      - name: Preparar bloques de publicacion
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf upload-root upload-data-base upload-assets-base
-          mkdir -p upload-root upload-data-base upload-assets-base
-
-          find deploy -maxdepth 1 -type f -exec cp -p {} upload-root/ \;
-          find deploy/data -maxdepth 1 -type f -exec cp -p {} upload-data-base/ \;
-          find deploy/assets -maxdepth 1 -type f -exec cp -p {} upload-assets-base/ \;
-
-      - name: Publicar Mapa por bloques con reintentos FTPS
+      - name: Publicar archivos del Mapa individualmente
         shell: bash
         env:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FULL_DATA: ${{ inputs.publicar_datos_estructurales }}
         run: |
           set -euo pipefail
 
-          upload_block() {
-            local local_dir="$1"
-            local remote_dir="$2"
+          upload_file() {
+            local local_file="$1"
+            local remote_file="$2"
             local label="$3"
 
-            if [ ! -d "$local_dir" ]; then
-              echo "Bloque omitido porque no existe: $label ($local_dir)"
-              return 0
+            if [ ! -f "$local_file" ]; then
+              echo "[$label] ERROR: no existe $local_file"
+              return 1
             fi
 
-            for attempt in 1 2 3 4; do
-              echo "[$label] intento ${attempt} de 4..."
+            for attempt in 1 2 3; do
+              echo "[$label] intento ${attempt} de 3 -> ${remote_file}"
 
-              if lftp -u "$FTP_USERNAME","$FTP_PASSWORD" whm95.mxwebserver.com -e "
+              if timeout --kill-after=8s 45s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
                 set cmd:fail-exit yes;
-                set net:timeout 30;
-                set net:max-retries 1;
-                set net:reconnect-interval-base 5;
                 set ftp:passive-mode true;
                 set ftp:ssl-force true;
                 set ftp:ssl-protect-data true;
                 set ftp:ssl-auth TLS;
+                set ftp:sync-mode false;
                 set ssl:verify-certificate yes;
                 set ssl:check-hostname yes;
-                mirror --reverse --overwrite --continue --verbose --parallel=1 '$local_dir' '$remote_dir';
+                set net:timeout 20;
+                set net:max-retries 0;
+                put '$local_file' -o '$remote_file';
                 bye;
               "; then
-                echo "[$label] publicado correctamente."
+                echo "[$label] OK"
                 return 0
               fi
 
-              if [ "$attempt" -lt 4 ]; then
-                echo "[$label] fallo de transferencia. Reintento en 12 segundos..."
-                sleep 12
+              if [ "$attempt" -lt 3 ]; then
+                echo "[$label] transferencia fallida. Reintento en 8 segundos..."
+                sleep 8
               fi
             done
 
-            echo "[$label] no pudo publicarse despues de 4 intentos."
+            echo "[$label] ERROR despues de 3 intentos"
             return 1
           }
 
-          upload_block "./upload-root/" "./" "Archivos raiz"
-          upload_block "./upload-data-base/" "./data/" "Datos base JSON/GeoJSON"
-          upload_block "./deploy/vendor/" "./vendor/" "MSAL local"
-          upload_block "./upload-assets-base/" "./assets/" "Assets base"
-          upload_block "./deploy/assets/map/" "./assets/map/" "Imagen base del mapa"
+          echo "=== Publicacion de codigo principal ==="
+          upload_file "deploy/index.php" "index.php" "index.php"
+          upload_file "deploy/app.js" "app.js" "app.js"
+          upload_file "deploy/styles.css" "styles.css" "styles.css"
+          upload_file "deploy/portal-integration.css" "portal-integration.css" "portal-integration.css"
+          upload_file "deploy/account-menu.css" "account-menu.css" "account-menu.css"
+          upload_file "deploy/mapa-enhancements.js" "mapa-enhancements.js" "mapa-enhancements.js"
+          upload_file "deploy/public-ui-fixes.js" "public-ui-fixes.js" "public-ui-fixes.js"
+          upload_file "deploy/sharepoint-inventario.js" "sharepoint-inventario.js" "sharepoint-inventario.js"
+          upload_file "deploy/vendor/msal-browser.min.js" "vendor/msal-browser.min.js" "MSAL local"
 
-          echo "Las imagenes grandes de nichos se omiten del FTPS para evitar timeouts; no son necesarias para secciones, manzanas ni lotes."
+          echo "=== Archivos de datos pequenos necesarios ==="
+          upload_file "deploy/data/lotes.json" "data/lotes.json" "lotes.json"
+          upload_file "deploy/data/paquetes.json" "data/paquetes.json" "paquetes.json"
+          upload_file "deploy/data/inventario-overrides.json" "data/inventario-overrides.json" "inventario-overrides.json"
 
-          upload_block "./deploy/data/lotes/" "./data/lotes/" "Geometrias de lotes"
-          upload_block "./deploy/data/nichos/" "./data/nichos/" "Datos de nichos"
+          if [ "$FULL_DATA" = "true" ]; then
+            echo "=== Republicacion estructural solicitada ==="
 
-          echo "Publicacion principal del Mapa terminada por bloques."
+            upload_file "deploy/data/catalogo-propiedades.json" "data/catalogo-propiedades.json" "catalogo-propiedades.json"
+            upload_file "deploy/data/inventario-base.json" "data/inventario-base.json" "inventario-base.json"
+            upload_file "deploy/data/nichos-overlay.geojson" "data/nichos-overlay.geojson" "nichos-overlay.geojson"
+            upload_file "deploy/data/nichos-zonas.geojson" "data/nichos-zonas.geojson" "nichos-zonas.geojson"
+            upload_file "deploy/data/secciones-top.geojson" "data/secciones-top.geojson" "secciones-top.geojson"
+            upload_file "deploy/data/secciones.geojson" "data/secciones.geojson" "secciones.geojson"
+            upload_file "deploy/assets/logo.jpg" "assets/logo.jpg" "logo"
+            upload_file "deploy/assets/map/base-public.webp" "assets/map/base-public.webp" "mapa base"
+
+            while IFS= read -r -d '' file; do
+              remote="${file#deploy/}"
+              upload_file "$file" "$remote" "$remote"
+            done < <(find deploy/data/lotes -type f -print0 | sort -z)
+
+            while IFS= read -r -d '' file; do
+              remote="${file#deploy/}"
+              upload_file "$file" "$remote" "$remote"
+            done < <(find deploy/data/nichos -type f -print0 | sort -z)
+
+            echo "Las imagenes grandes de assets/nichos se mantienen fuera del FTPS para evitar timeouts."
+          else
+            echo "Datos estructurales sin cambios: se conserva la version estable ya publicada en cPanel."
+          fi
+
+          echo "Publicacion incremental del Mapa completada correctamente."
