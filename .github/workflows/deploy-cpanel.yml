@@ -1,0 +1,98 @@
+name: Publicar Mapa independiente en cPanel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app.js'
+      - 'styles.css'
+      - 'index.html'
+      - 'sharepoint-inventario.js'
+      - 'public-ui-fixes.js'
+      - 'portal-integration.css'
+      - 'account-menu.css'
+      - 'mapa-enhancements.js'
+      - 'data/**'
+      - 'assets/map/**'
+      - 'assets/nichos/**'
+      - 'assets/logo.jpg'
+      - 'tools/build_portal_map.py'
+      - '.deploy-trigger'
+      - '.github/workflows/deploy-cpanel.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-mapa-independiente
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Validar y publicar Mapa
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Preparar PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Instalar MSAL local para produccion
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp-msal
+          npm install --prefix .tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
+
+      - name: Construir paquete autonomo del Mapa
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/build_portal_map.py
+          mkdir -p deploy/vendor
+          cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
+          rm -rf .tmp-msal
+
+      - name: Validar paquete
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s deploy/index.php
+          test -s deploy/app.js
+          test -s deploy/styles.css
+          test -s deploy/sharepoint-inventario.js
+          test -s deploy/public-ui-fixes.js
+          test -s deploy/portal-integration.css
+          test -s deploy/account-menu.css
+          test -s deploy/mapa-enhancements.js
+          test -s deploy/assets/logo.jpg
+          test -s deploy/assets/map/base-public.webp
+          test -s deploy/vendor/msal-browser.min.js
+          test -d deploy/data
+          test -d deploy/assets/nichos
+          php -l deploy/index.php
+          grep -q 'Mapa del Panteón' deploy/index.php
+          grep -q 'portal_require_authentication' deploy/index.php
+
+      - name: Publicar en raiz FTP exclusiva del Mapa
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: whm95.mxwebserver.com
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: strict
+          timeout: 180000
+          local-dir: ./deploy/
+          server-dir: ./
+          dry-run: false
+          log-level: standard
