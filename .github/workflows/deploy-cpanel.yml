@@ -118,10 +118,17 @@ jobs:
             local local_dir="$1"
             local remote_dir="$2"
             local label="$3"
+            local mkdir_command=""
 
             if [ ! -d "$local_dir" ]; then
               echo "Bloque omitido porque no existe: $label ($local_dir)"
               return 0
+            fi
+
+            # La cuenta FTP del Mapa ya inicia directamente en /mapa/.
+            # No se debe intentar crear './' porque cPanel responde 501 No directory name.
+            if [ "$remote_dir" != "./" ] && [ "$remote_dir" != "." ]; then
+              mkdir_command="mkdir -p '$remote_dir';"
             fi
 
             for attempt in 1 2 3 4; do
@@ -138,7 +145,7 @@ jobs:
                 set ftp:ssl-auth TLS;
                 set ssl:verify-certificate yes;
                 set ssl:check-hostname yes;
-                mkdir -p '$remote_dir';
+                $mkdir_command
                 mirror --reverse --overwrite --continue --verbose --parallel=1 '$local_dir' '$remote_dir';
                 bye;
               "; then
