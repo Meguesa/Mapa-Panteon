@@ -8,7 +8,7 @@
   --jp-text: #241d19;
   --jp-muted: #6d655f;
   --jp-border: #e8e1d8;
-  --portal-map-toolbar-height: 82px;
+  --portal-map-toolbar-height: 86px;
   --portal-map-controls-height: 52px;
   --portal-map-total-header-height: calc(var(--portal-map-toolbar-height) + var(--portal-map-controls-height));
   --topbar-h: var(--portal-map-total-header-height);
@@ -40,16 +40,16 @@ body.mapa-page {
   display: flex;
   align-items: center;
   background: var(--jp-surface);
-  border-bottom: 3px solid var(--jp-gold);
-  box-shadow: 0 6px 20px rgba(58, 17, 9, .08);
+  border-bottom: 2px solid var(--jp-gold);
+  box-shadow: 0 6px 20px rgba(58, 17, 9, .06);
 }
 
 .portal-map-toolbar-inner {
-  width: min(1320px, calc(100% - 36px));
+  width: min(1180px, calc(100% - 36px));
   min-height: var(--portal-map-toolbar-height);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 1fr) 1px auto;
   align-items: center;
   gap: 24px;
 }
@@ -61,65 +61,61 @@ body.mapa-page {
   gap: 14px;
 }
 
-.portal-map-logo {
-  width: auto;
-  height: 58px;
-  flex: 0 0 auto;
-  display: block;
-  object-fit: contain;
-}
+.portal-map-logo { display: none; }
 
 .portal-map-title {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .portal-map-title strong,
-.portal-map-title span {
-  display: block;
-}
+.portal-map-title span { display: block; }
 
 .portal-map-title strong {
   color: var(--jp-brown);
-  font-size: 21px;
-  line-height: 1.18;
+  font-size: 24px;
+  line-height: 1.15;
 }
 
 .portal-map-title span {
-  margin-top: 4px;
-  color: var(--jp-blue);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .02em;
+  order: -1;
+  margin-top: 0;
+  color: #7a675d;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .portal-map-context {
-  justify-self: center;
-  color: var(--jp-muted);
-  font-size: 12px;
-  font-weight: 700;
-  text-align: center;
+  width: 1px;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
 }
 
 .portal-map-actions {
+  grid-column: 3;
   justify-self: end;
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
 }
 
 .portal-map-back {
-  min-height: 42px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 16px;
-  color: var(--jp-brown);
+  padding: 0 17px;
+  color: #0b4e7d;
   background: #fff;
-  border: 1px solid #d9ccc5;
-  border-radius: 8px;
+  border: 1px solid #c9d9e7;
+  border-radius: 10px;
   text-decoration: none;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .portal-map-back:hover,
@@ -234,14 +230,10 @@ html body.mapa-page #map {
   height: 100% !important;
 }
 
-html body.mapa-page .jp-side-panel {
-  min-height: 0;
-}
+html body.mapa-page .jp-side-panel { min-height: 0; }
 
 body.mapa-page .account-menu,
-body.mapa-page .account-menu-panel {
-  z-index: 20070 !important;
-}
+body.mapa-page .account-menu-panel { z-index: 20070 !important; }
 
 body.mapa-page .portal-map-toolbar .account-trigger {
   width: 46px !important;
@@ -295,84 +287,45 @@ body.mapa-page #nichosOverlayEditor { z-index: 18900 !important; }
 
 body.mapa-page .leaflet-container,
 body.mapa-page .leaflet-pane,
-body.mapa-page .leaflet-control-container {
-  z-index: auto;
-}
+body.mapa-page .leaflet-control-container { z-index: auto; }
 
 @media (max-width: 1050px) {
   :root {
-    --portal-map-toolbar-height: 76px;
+    --portal-map-toolbar-height: 82px;
     --portal-map-controls-height: 76px;
   }
-
-  .portal-map-toolbar-inner {
-    min-height: var(--portal-map-toolbar-height);
-    grid-template-columns: 1fr auto;
-  }
-
+  .portal-map-toolbar-inner { min-height: var(--portal-map-toolbar-height); grid-template-columns: 1fr auto; }
   .portal-map-context { display: none; }
-
-  body.mapa-page .map-controls-header .controls {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
+  .portal-map-actions { grid-column: 2; }
+  body.mapa-page .map-controls-header .controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .map-controls-label { display: none; }
 }
 
 @media (max-width: 720px) {
   :root {
-    --portal-map-toolbar-height: 70px;
+    --portal-map-toolbar-height: 78px;
     --portal-map-controls-height: 158px;
   }
-
-  .portal-map-toolbar-inner {
-    width: calc(100% - 24px);
-    gap: 10px;
-  }
-
-  .portal-map-logo { height: 48px; }
-  .portal-map-title strong { font-size: 17px; }
-  .portal-map-title span { display: none; }
-
-  .portal-map-back {
-    min-height: 38px;
-    padding: 0 11px;
-    font-size: 11px;
-  }
-
+  .portal-map-toolbar-inner { width: calc(100% - 24px); gap: 10px; }
+  .portal-map-title strong { font-size: 21px; }
+  .portal-map-title span { font-size: 12px; }
+  .portal-map-back { min-height: 38px; padding: 0 11px; font-size: 11px; }
   .portal-map-actions { gap: 8px; }
-
   body.mapa-page .portal-map-toolbar .account-trigger {
-    width: 42px !important;
-    min-width: 42px !important;
-    max-width: 42px !important;
-    height: 42px !important;
-    min-height: 42px !important;
-    max-height: 42px !important;
-    flex-basis: 42px !important;
+    width: 42px !important; min-width: 42px !important; max-width: 42px !important;
+    height: 42px !important; min-height: 42px !important; max-height: 42px !important; flex-basis: 42px !important;
   }
-
   body.mapa-page .map-controls-header { padding: 9px 12px !important; }
-
-  body.mapa-page .map-controls-header .controls {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
+  body.mapa-page .map-controls-header .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body.mapa-page .map-controls-header #searchInput { grid-column: 1 / -1; }
-
-  html body.mapa-page.public-map.has-section-selected .jp-side-panel {
-    max-height: 42vh !important;
-  }
+  html body.mapa-page.public-map.has-section-selected .jp-side-panel { max-height: 42vh !important; }
 }
 
 @media (max-width: 480px) {
   :root { --portal-map-controls-height: 202px; }
   .portal-map-title-wrap { gap: 8px; }
-  .portal-map-logo { height: 42px; }
-  .portal-map-title strong { font-size: 15px; }
+  .portal-map-title strong { font-size: 19px; }
+  .portal-map-title span { display: none; }
   .portal-map-back { padding: 0 9px; }
-
-  body.mapa-page .map-controls-header .controls {
-    grid-template-columns: 1fr 1fr;
-  }
+  body.mapa-page .map-controls-header .controls { grid-template-columns: 1fr 1fr; }
 }
