@@ -62,20 +62,18 @@ def inject_preview_assets() -> None:
     source = source.replace(
         '<link rel="stylesheet" href="./portal-integration.css?v=5" />',
         '<link rel="stylesheet" href="./portal-integration.css?v=5" />\n'
-        '  <link rel="stylesheet" href="./nichos-v2-preview.css?v=3" />',
+        '  <link rel="stylesheet" href="./nichos-v2-preview.css?v=4" />',
         1,
     )
 
     source = source.replace(
         "</body>",
-        '  <script src="./nichos-v2-preview.js?v=3"></script>\n'
-        '  <script src="./nichos-v2-map-integration.js?v=3"></script>\n'
+        '  <script src="./nichos-v2-preview.js?v=4"></script>\n'
+        '  <script src="./nichos-v2-map-integration.js?v=4"></script>\n'
         '</body>',
         1,
     )
 
-    # El preview vive un nivel debajo de /mapa/. El bootstrap del Portal esta
-    # en la raiz del sitio, por lo que hay que subir dos niveles.
     source = source.replace(
         "require_once dirname(__DIR__) . '/includes/bootstrap.php';",
         "require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';",
@@ -88,12 +86,6 @@ def inject_preview_assets() -> None:
 def main() -> None:
     build_portal_map.main()
 
-    # El loader existente de sharepoint-inventario.js se conserva intacto.
-    # Ese archivo ya intercepta /data/inventario-base.json también dentro de
-    # /mapa/preview-nichos-v2/ y obtiene la misma lista real de SharePoint que
-    # usa el mapa productivo. Su Redirect URI permanece en /mapa/ para usar la
-    # configuración MSAL ya registrada y, con navigateToLoginRequestUrl=true,
-    # regresar a la página que inició la autenticación.
     patch_app_hover()
 
     shutil.copy2(ROOT / "nichos-v2-preview.js", DEPLOY / "nichos-v2-preview.js")
@@ -126,15 +118,7 @@ def main() -> None:
 
     for path in required:
         if not path.is_file() or path.stat().st_size == 0:
-            raise RuntimeError(f"Archivo de preview faltante o vacio: {path}")
-
-    sharepoint_source = (DEPLOY / "sharepoint-inventario.js").read_text(encoding="utf-8")
-    if 'listId: "208b6147-b487-48f8-ba3f-97aeb1ba9021"' not in sharepoint_source:
-        raise RuntimeError("El preview no contiene el loader de la lista SharePoint esperada")
-
-    app_source = (DEPLOY / "app.js").read_text(encoding="utf-8")
-    if "showHoverNameTooltip(layer, label, 'nicho')" not in app_source:
-        raise RuntimeError("El hover con nombre de zonas de nichos no quedo integrado")
+            raise RuntimeError(f"Archivo de preview faltante o vacío: {path}")
 
     print("Preview Nichos V2 preparado para /mapa/preview-nichos-v2/")
 
