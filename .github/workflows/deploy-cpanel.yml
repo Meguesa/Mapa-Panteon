@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      publicar_solo_referencias_visuales:
+        description: 'Publicar solo el JS y las fotos de referencias visuales (Americano/VIP)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -116,6 +121,7 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FULL_DATA: ${{ inputs.publicar_datos_estructurales }}
+          VISUAL_ONLY: ${{ inputs.publicar_solo_referencias_visuales }}
         run: |
           set -euo pipefail
 
@@ -159,6 +165,53 @@ jobs:
             echo "[$label] ERROR despues de 3 intentos"
             return 1
           }
+
+          upload_visual_references_batch() {
+            for attempt in 1 2 3; do
+              echo "[referencias visuales] lote completo: intento ${attempt} de 3"
+
+              if timeout --kill-after=10s 180s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
+                set cmd:fail-exit yes;
+                set ftp:passive-mode true;
+                set ftp:ssl-force true;
+                set ftp:ssl-protect-data true;
+                set ftp:ssl-auth TLS;
+                set ftp:sync-mode true;
+                set ssl:verify-certificate yes;
+                set ssl:check-hostname yes;
+                set net:timeout 30;
+                set net:max-retries 1;
+                mkdir -p assets;
+                put 'deploy/section-visual-references.js' -o 'section-visual-references.js';
+                put 'deploy/assets/americano-01.webp' -o 'assets/americano-01.webp';
+                put 'deploy/assets/americano-02.webp' -o 'assets/americano-02.webp';
+                put 'deploy/assets/americano-03.webp' -o 'assets/americano-03.webp';
+                put 'deploy/assets/americano-04.webp' -o 'assets/americano-04.webp';
+                put 'deploy/assets/vip-01.webp' -o 'assets/vip-01.webp';
+                put 'deploy/assets/vip-02.webp' -o 'assets/vip-02.webp';
+                put 'deploy/assets/vip-03.webp' -o 'assets/vip-03.webp';
+                bye;
+              "; then
+                echo "[referencias visuales] JS y 7 imagenes publicados correctamente en una sola sesion FTPS."
+                return 0
+              fi
+
+              if [ "$attempt" -lt 3 ]; then
+                echo "[referencias visuales] lote fallido. Reintento en 12 segundos..."
+                sleep 12
+              fi
+            done
+
+            echo "[referencias visuales] ERROR despues de 3 intentos del lote completo"
+            return 1
+          }
+
+          if [ "$VISUAL_ONLY" = "true" ]; then
+            echo "=== Publicacion exclusiva de referencias visuales ==="
+            upload_visual_references_batch
+            echo "Publicacion exclusiva de referencias visuales completada correctamente."
+            exit 0
+          fi
 
           echo "=== Publicacion de codigo principal ==="
           upload_file "deploy/index.php" "index.php" "index.php"
