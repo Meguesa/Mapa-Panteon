@@ -30,6 +30,38 @@
     button.addEventListener('click', closePreviewFromBack, true);
   }
 
+  function ensurePanelControls() {
+    const modal = document.getElementById('nichosV2Preview');
+    if (!modal) return;
+
+    const firstSection = modal.querySelector('.nv2-panel .nv2-panel-section:first-child');
+    if (!firstSection) return;
+
+    if (!firstSection.querySelector('.nv2-panel-close')) {
+      const closeButton = document.createElement('button');
+      closeButton.type = 'button';
+      closeButton.className = 'nv2-panel-close';
+      closeButton.textContent = 'Cerrar';
+      closeButton.addEventListener('click', () => window.NICHOS_V2_PREVIEW?.close?.());
+      firstSection.appendChild(closeButton);
+    }
+
+    const filterSection = modal.querySelector('#nv2Filters')?.closest('.nv2-panel-section');
+    if (filterSection && !filterSection.querySelector('.nv2-panel-current-filter')) {
+      const current = document.createElement('p');
+      current.className = 'nv2-panel-current-filter';
+      current.innerHTML = 'Filtro actual: <b>todos</b>';
+      filterSection.appendChild(current);
+    }
+
+    const activeFilter = modal.querySelector('#nv2Filters .nv2-filter.active');
+    const currentFilter = filterSection?.querySelector('.nv2-panel-current-filter b');
+    if (currentFilter) {
+      const raw = activeFilter?.dataset?.filter || 'todos';
+      currentFilter.textContent = raw;
+    }
+  }
+
   function zoneLabel(feature) {
     const p = feature?.properties || {};
     const id = (p.id || p.zonaId || p.columbarioId || '').toString().trim();
@@ -64,15 +96,11 @@
     }
 
     layer.on('mouseover', () => {
-      try {
-        layer.openTooltip();
-      } catch {}
+      try { layer.openTooltip(); } catch {}
     });
 
     layer.on('mouseout', () => {
-      try {
-        layer.closeTooltip();
-      } catch {}
+      try { layer.closeTooltip(); } catch {}
     });
   }
 
@@ -122,16 +150,16 @@
     bindBackButton();
     installLayerHook();
     enhanceCurrentNicheZoneLayer();
+    ensurePanelControls();
 
-    // Se mantiene activo durante toda la sesión porque app.js reconstruye la
-    // capa de zonas al cambiar entre niveles. El costo es mínimo (dos zonas).
     window.setInterval(() => {
       bindBackButton();
       installLayerHook();
       enhanceCurrentNicheZoneLayer();
-    }, 750);
+      ensurePanelControls();
+    }, 500);
 
-    console.info('[Mapa] Integración Nichos V2: Volver + hover persistente instalada.');
+    console.info('[Mapa] Integración Nichos V2: panel, Volver y hover persistente instalados.');
   }
 
   install();
