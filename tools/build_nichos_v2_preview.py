@@ -8,7 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy"
 
 V2_RAW = "https://raw.githubusercontent.com/Sabbathycal/Mapa-Panteon/V2"
-PREVIEW_URL = "https://portal.juanpablo.com.mx/mapa/preview-nichos-v2/"
 
 FILES = {
     "assets/PLN-concavo.png": f"{V2_RAW}/src/assets/images/nichos/normalizadas/PLN-concavo.png",
@@ -56,21 +55,6 @@ def patch_app_hover() -> None:
     app_path.write_text(source, encoding="utf-8")
 
 
-def patch_sharepoint_preview_redirect() -> None:
-    """Mantiene el inventario del preview leyendo la misma lista real de SharePoint."""
-    path = DEPLOY / "sharepoint-inventario.js"
-    source = path.read_text(encoding="utf-8")
-
-    old = ': "https://portal.juanpablo.com.mx/mapa/",'
-    new = f': "{PREVIEW_URL}",'
-
-    if old not in source:
-        raise RuntimeError("No se encontro Redirect URI productivo esperado en sharepoint-inventario.js")
-
-    source = source.replace(old, new, 1)
-    path.write_text(source, encoding="utf-8")
-
-
 def inject_preview_assets() -> None:
     index_path = DEPLOY / "index.php"
     source = index_path.read_text(encoding="utf-8")
@@ -104,15 +88,18 @@ def inject_preview_assets() -> None:
 def main() -> None:
     build_portal_map.main()
 
+    # El loader existente de sharepoint-inventario.js se conserva intacto.
+    # Ese archivo ya intercepta /data/inventario-base.json también dentro de
+    # /mapa/preview-nichos-v2/ y obtiene la misma lista real de SharePoint que
+    # usa el mapa productivo. Su Redirect URI permanece en /mapa/ para usar la
+    # configuración MSAL ya registrada y, con navigateToLoginRequestUrl=true,
+    # regresar a la página que inició la autenticación.
     patch_app_hover()
-    patch_sharepoint_preview_redirect()
 
     shutil.copy2(ROOT / "nichos-v2-preview.js", DEPLOY / "nichos-v2-preview.js")
     shutil.copy2(ROOT / "nichos-v2-preview.css", DEPLOY / "nichos-v2-preview.css")
     shutil.copy2(ROOT / "nichos-v2-map-integration.js", DEPLOY / "nichos-v2-map-integration.js")
 
-    # Las imagenes antiguas de nichos son muy pesadas y no son necesarias para
-    # este preview. Se sustituyen por las imagenes normalizadas de V2.
     legacy_niche_assets = DEPLOY / "assets" / "nichos"
     if legacy_niche_assets.exists():
         shutil.rmtree(legacy_niche_assets)
@@ -124,6 +111,7 @@ def main() -> None:
 
     required = [
         DEPLOY / "index.php",
+        DEPLOY / "app.js",
         DEPLOY / "nichos-v2-preview.js",
         DEPLOY / "nichos-v2-preview.css",
         DEPLOY / "nichos-v2-map-integration.js",
@@ -141,8 +129,8 @@ def main() -> None:
             raise RuntimeError(f"Archivo de preview faltante o vacio: {path}")
 
     sharepoint_source = (DEPLOY / "sharepoint-inventario.js").read_text(encoding="utf-8")
-    if PREVIEW_URL not in sharepoint_source:
-        raise RuntimeError("El preview no quedo configurado con Redirect URI propio de SharePoint")
+    if 'listId: "208b6147-b487-48f8-ba3f-97aeb1ba9021"' not in sharepoint_source:
+        raise RuntimeError("El preview no contiene el loader de la lista SharePoint esperada")
 
     app_source = (DEPLOY / "app.js").read_text(encoding="utf-8")
     if "showHoverNameTooltip(layer, label, 'nicho')" not in app_source:
