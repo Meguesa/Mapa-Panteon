@@ -95,6 +95,12 @@
     return status || 'desconocido';
   }
 
+  function normalizeInventoryCode(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    return /^\d+$/.test(text) ? String(Number(text)) : normalizeUpper(text);
+  }
+
   function safe(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -133,52 +139,107 @@
     return cssVar(meta.css, fallbacks[status] || fallbacks.desconocido);
   }
 
-  function geometryIdentity(properties) {
+  /*
+   * El GeoJSON V2 NO se cruza con SharePoint usando la referencia visual
+   * "SPN-39-F". El repositorio V2 original usa zona + cara + manzana/bloque
+   * + código. En PLN cóncavo hay una regla especial: el bloque es la fila más
+   * el primer dígito del número (A1, A2, B1, etc.).
+   *
+   * Replicamos exactamente esa regla para que Referencia ProCaP, usos de
+   * cenizas, finado y estatus provengan del registro correcto de SharePoint.
+   */
+  function geometryInventoryIdentity(properties) {
     const p = properties ?? {};
     const zone = normalizeUpper(p.zonaId || state.zoneId);
     const side = normalizeSide(p.cara || state.side);
-
-    let row = normalizeUpper(p.fila);
-    let number = String(p.numero ?? '').trim();
-
-    if ((!row || !number) && p.codigo) {
-      const match = normalizeUpper(p.codigo).match(/^([A-Z]+)0*(\d+)$/);
-      if (match) {
-        row = row || match[1];
-        number = number || String(Number(match[2]));
-      }
-    }
+    const row = normalizeUpper(p.fila);
+    const number = normalizeInventoryCode(p.numero);
 
     if (!zone || !side || !row || !number) {
-      return { zone, side, row, number, inventoryCode: '' };
+      return {
+        zone,
+        side,
+        row,
+        number,
+        block: '',
+        code: '',
+        mapReference: '',
+      };
     }
 
-    const normalizedNumber = /^\d+$/.test(number)
-      ? String(Number(number)).padStart(2, '0')
-      : normalizeUpper(number);
+    let block = row;
+
+    if (zone === 'PLN' && side === 'concavo') {
+      block = `${row}${String(number).charAt(0)}`;
+    }
+
+    const mapNumber = /^\d+$/.test(number) ? String(Number(number)).padStart(2, '0') : number;
 
     return {
       zone,
       side,
       row,
       number,
-      inventoryCode: `${zone}-${normalizedNumber}-${row}`,
+      block,
+      code: number,
+      mapReference: `${zone}-${mapNumber}-${row}`,
     };
   }
 
-  function inventoryKey(zone, side, code) {
-    return [normalizeUpper(zone), normalizeSide(side), normalizeUpper(code)].join('|');
+  function sourceNicheCode(item) {
+    if (item?.codigo_origen !== undefined && item?.codigo_origen !== null) {
+      const raw = normalizeInventoryCode(item.codigo_origen);
+      if (raw) return raw;
+    }
+
+    const current = String(item?.codigo ?? '').trim();
+    if (!current) return '';
+
+    if (/^\d+$/.test(current)) return String(Number(current));
+
+    const zone = normalizeUpper(item?.zonaId || item?.seccion);
+    const normalized = normalizeUpper(current);
+    const prefix = zone ? `${zone}-` : '';
+    const rest = prefix && normalized.startsWith(prefix)
+      ? normalized.slice(prefix.length)
+      : normalized;
+
+    const generatedMatch = rest.match(/^0*(\d+)-/);
+    if (generatedMatch) return String(Number(generatedMatch[1]));
+
+    return normalizeInventoryCode(current);
+  }
+
+  function inventoryKey(zone, side, block, code) {
+    return [
+      normalizeUpper(zone),
+      normalizeSide(side),
+      normalizeUpper(block),
+      normalizeInventoryCode(code),
+    ].join('|');
   }
 
   function rebuildInventoryIndex() {
     state.inventoryIndex.clear();
 
     const items = Array.isArray(state.inventory?.items) ? state.inventory.items : [];
+    let nicheCount = 0;
+
     for (const item of items) {
       if (normalizeLower(item?.tipo) !== 'nicho') continue;
-      const key = inventoryKey(item.zonaId || item.seccion, item.cara, item.codigo);
-      if (key !== '||') state.inventoryIndex.set(key, item);
+
+      const zone = item.zonaId || item.seccion;
+      const side = item.cara;
+      const block = item.manzana;
+      const code = sourceNicheCode(item);
+
+      if (!zone || !side || !block || !code) continue;
+
+      state.inventoryIndex.set(inventoryKey(zone, side, block, code), item);
+      nicheCount += 1;
     }
+
+    console.info(`[Nichos V2 Preview] Índice SharePoint de nichos: ${nicheCount} registros.`);
   }
 
   async function loadInventory() {
@@ -209,20 +270,12 @@
   }
 
   function getInventoryRecord(feature) {
-    const identity = geometryIdentity(feature?.properties);
-    if (!identity.inventoryCode) return null;
+    const identity = geometryInventoryIdentity(feature?.properties);
+    if (!identity.zone || !identity.side || !identity.block || !identity.code) return null;
 
-    const direct = state.inventoryIndex.get(
-      inventoryKey(identity.zone, identity.side, identity.inventoryCode),
-    );
-    if (direct) return direct;
-
-    const p = feature?.properties ?? {};
-    const reference = normalizeUpper(p.referencia_procap);
-    if (!reference) return null;
-
-    const items = Array.isArray(state.inventory?.items) ? state.inventory.items : [];
-    return items.find((item) => normalizeUpper(item?.referencia_procap) === reference) || null;
+    return state.inventoryIndex.get(
+      inventoryKey(identity.zone, identity.side, identity.block, identity.code),
+    ) || null;
   }
 
   function getFeatureStatus(feature) {
@@ -267,13 +320,21 @@
           <aside class="nv2-panel">
             <section class="nv2-panel-section">
               <div class="nv2-eyebrow">Zona de nichos</div>
-              <h3 id="nv2ZoneName">—</h3>
+              <div class="nv2-zone-heading-row">
+                <h3 id="nv2ZoneName">—</h3>
+                <button id="nv2PanelClose" type="button" class="nv2-panel-close">Cerrar</button>
+              </div>
               <div id="nv2InventorySource" class="nv2-source"></div>
             </section>
 
             <section class="nv2-panel-section">
               <h4>Caras disponibles</h4>
               <div id="nv2Sides" class="nv2-chip-grid"></div>
+            </section>
+
+            <section class="nv2-panel-section nv2-selected-section">
+              <h4>Nicho seleccionado</h4>
+              <div id="nv2Selected" class="nv2-selected-empty">Selecciona un nicho en el mapa.</div>
             </section>
 
             <section class="nv2-panel-section">
@@ -290,11 +351,6 @@
               <h4>Resumen</h4>
               <dl id="nv2Summary" class="nv2-summary"></dl>
             </section>
-
-            <section class="nv2-panel-section nv2-selected-section">
-              <h4>Nicho seleccionado</h4>
-              <div id="nv2Selected" class="nv2-selected-empty">Selecciona un nicho en el mapa.</div>
-            </section>
           </aside>
         </div>
       </section>
@@ -303,7 +359,8 @@
     document.body.appendChild(modal);
     state.modal = modal;
 
-    modal.querySelector('#nv2Close').addEventListener('click', closePreview);
+    modal.querySelector('#nv2Close')?.addEventListener('click', closePreview);
+    modal.querySelector('#nv2PanelClose')?.addEventListener('click', closePreview);
     modal.querySelector('#nv2Recenter').addEventListener('click', recenter);
     modal.addEventListener('click', (event) => {
       if (event.target === modal) closePreview();
@@ -463,23 +520,33 @@
     }
 
     const p = feature.properties ?? {};
-    const identity = geometryIdentity(p);
+    const identity = geometryInventoryIdentity(p);
     const inventory = getInventoryRecord(feature);
     const status = getFeatureStatus(feature);
     const meta = STATUS_META[status] || STATUS_META.desconocido;
 
+    const procapReference = inventory?.referencia_procap || '';
+    const ashUses = inventory ? Number(inventory.usos_cenizas || 0) : null;
+    const ashCapacity = inventory ? Number(inventory.capacidad_cenizas || 0) : null;
+
     container.className = 'nv2-selected-card';
     container.innerHTML = `
-      <div class="nv2-selected-code">${safe(p.codigo || `${identity.row}${identity.number}` || identity.inventoryCode)}</div>
+      <div class="nv2-selected-code">${safe(p.codigo || `${identity.row}${identity.number}` || identity.mapReference)}</div>
       <dl>
         <div><dt>Zona</dt><dd>${safe(identity.zone || state.zoneId)}</dd></div>
         <div><dt>Cara</dt><dd>${safe(ZONES[state.zoneId]?.sides?.[identity.side]?.label || identity.side)}</dd></div>
-        <div><dt>Referencia mapa</dt><dd>${safe(identity.inventoryCode || '-')}</dd></div>
-        <div><dt>Estado</dt><dd><span class="nv2-status-pill" style="--pill:${statusColor(status)}">${safe(meta.label)}</span></dd></div>
+        <div><dt>Referencia mapa</dt><dd>${safe(identity.mapReference || '-')}</dd></div>
+        <div><dt>Estatus</dt><dd><span class="nv2-status-pill" style="--pill:${statusColor(status)}">${safe(meta.label)}</span></dd></div>
         <div><dt>Construido</dt><dd>${inventory?.esta_construido === true ? 'Sí' : inventory?.esta_construido === false ? 'No' : '-'}</dd></div>
-        <div><dt>Referencia ProCaP</dt><dd>${safe(inventory?.referencia_procap || p.referencia_procap || '-')}</dd></div>
-        <div><dt>Uso de cenizas</dt><dd>${inventory ? `${Number(inventory.usos_cenizas || 0)} / ${Number(inventory.capacidad_cenizas || 0)}` : '-'}</dd></div>
+        <div><dt>Referencia ProCaP</dt><dd>${safe(procapReference || 'Sin referencia en SharePoint')}</dd></div>
+        <div><dt>Uso de cenizas</dt><dd>${inventory ? `${ashUses} / ${ashCapacity}` : '-'}</dd></div>
+        ${inventory?.finado ? `<div><dt>Finado</dt><dd>${safe(inventory.finado)}</dd></div>` : ''}
       </dl>
+      ${!inventory ? `
+        <p class="nv2-inventory-warning">
+          Este nicho no encontró coincidencia exacta en SharePoint usando zona, cara, manzana y código.
+        </p>
+      ` : ''}
     `;
   }
 
@@ -521,9 +588,9 @@
     state.nicheLayer = L.geoJSON(filteredCollection(), {
       style: featureStyle,
       onEachFeature(feature, layer) {
-        const identity = geometryIdentity(feature.properties);
+        const identity = geometryInventoryIdentity(feature.properties);
         const status = getFeatureStatus(feature);
-        const label = feature?.properties?.codigo || `${identity.row}${identity.number}` || identity.inventoryCode;
+        const label = feature?.properties?.codigo || `${identity.row}${identity.number}` || identity.mapReference;
 
         layer.bindTooltip(`${label} · ${STATUS_META[status]?.label || 'Sin estado'}`, {
           direction: 'top',
