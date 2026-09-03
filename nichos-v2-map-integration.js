@@ -2,6 +2,7 @@
   'use strict';
 
   const ENHANCED_FLAG = '__nichosV2HoverEnhanced';
+  let lastLayerRef = null;
 
   function isPreviewOpen() {
     return Boolean(document.getElementById('nichosV2Preview')?.classList.contains('is-open'));
@@ -10,9 +11,6 @@
   function closePreviewFromBack(event) {
     if (!isPreviewOpen()) return;
 
-    // El boton Volver del mapa conserva su comportamiento normal cuando no
-    // estamos dentro de Nichos V2. Mientras el preview esta abierto, Volver
-    // significa exclusivamente regresar al mapa que estaba debajo.
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -29,8 +27,6 @@
     if (!button || button.dataset.nichosV2BackBound === '1') return;
 
     button.dataset.nichosV2BackBound = '1';
-    // Capture=true permite interceptar el click antes del listener normal de
-    // app.js y evita que cambie de nivel mientras se esta cerrando Nichos V2.
     button.addEventListener('click', closePreviewFromBack, true);
   }
 
@@ -41,40 +37,61 @@
     return name || id || 'Zona de nichos';
   }
 
-  function enhanceCurrentNicheZoneLayer() {
+  function enhanceLayer(layer) {
+    if (!layer || layer[ENHANCED_FLAG]) return;
+
+    const feature = layer.feature;
+    const properties = feature?.properties || {};
+    const type = String(properties.tipo || 'zona').trim().toLowerCase();
+    const zoneId = String(properties.id || properties.zonaId || properties.columbarioId || '').trim().toUpperCase();
+
+    if (!['zona', 'columbario'].includes(type) && !['PLN', 'SPN'].includes(zoneId)) return;
+
+    layer[ENHANCED_FLAG] = true;
+    const label = zoneLabel(feature);
+
     try {
-      if (typeof nichosZonasLayerPublic === 'undefined' || !nichosZonasLayerPublic?.eachLayer) return;
-
-      nichosZonasLayerPublic.eachLayer((layer) => {
-        if (!layer || layer[ENHANCED_FLAG]) return;
-        layer[ENHANCED_FLAG] = true;
-
-        const label = zoneLabel(layer.feature);
-
-        layer.on('mouseover', () => {
-          try {
-            if (typeof showHoverNameTooltip === 'function') {
-              showHoverNameTooltip(layer, label, 'nicho');
-            } else if (layer.bindTooltip) {
-              layer.bindTooltip(label, {
-                permanent: false,
-                direction: 'top',
-                className: 'hover-name-tooltip nicho',
-                opacity: 0.96,
-              }).openTooltip();
-            }
-          } catch {}
-        });
-
-        layer.on('mouseout', () => {
-          try {
-            if (typeof clearHoverNameTooltip === 'function') clearHoverNameTooltip();
-            else layer.closeTooltip?.();
-          } catch {}
-        });
+      layer.bindTooltip(label, {
+        permanent: false,
+        sticky: true,
+        direction: 'top',
+        opacity: 1,
+        className: 'nv2-zone-name-tooltip',
+        offset: [0, -6],
       });
     } catch (error) {
+      console.warn('[Nichos V2 Preview] No fue posible enlazar tooltip de zona.', error);
+    }
+
+    layer.on('mouseover', () => {
+      try {
+        layer.openTooltip();
+      } catch {}
+    });
+
+    layer.on('mouseout', () => {
+      try {
+        layer.closeTooltip();
+      } catch {}
+    });
+  }
+
+  function enhanceCurrentNicheZoneLayer() {
+    try {
+      if (typeof nichosZonasLayerPublic === 'undefined' || !nichosZonasLayerPublic?.eachLayer) {
+        return false;
+      }
+
+      if (lastLayerRef !== nichosZonasLayerPublic) {
+        lastLayerRef = nichosZonasLayerPublic;
+      }
+
+      nichosZonasLayerPublic.eachLayer(enhanceLayer);
+      try { nichosZonasLayerPublic.bringToFront(); } catch {}
+      return true;
+    } catch (error) {
       console.warn('[Nichos V2 Preview] No fue posible agregar etiquetas hover.', error);
+      return false;
     }
   }
 
@@ -89,11 +106,11 @@
       renderNichosZonasLayerPublic = function () {
         const result = originalRender.apply(this, arguments);
         window.setTimeout(enhanceCurrentNicheZoneLayer, 0);
+        window.setTimeout(enhanceCurrentNicheZoneLayer, 100);
+        window.setTimeout(enhanceCurrentNicheZoneLayer, 400);
         return result;
       };
 
-      // La capa normalmente ya existe cuando este archivo se carga.
-      enhanceCurrentNicheZoneLayer();
       return true;
     } catch (error) {
       console.warn('[Nichos V2 Preview] No fue posible instalar hook de zonas.', error);
@@ -104,22 +121,17 @@
   function install() {
     bindBackButton();
     installLayerHook();
+    enhanceCurrentNicheZoneLayer();
 
-    // Reintenta por unos segundos porque app.js carga de forma dinamica.
-    const startedAt = Date.now();
-    const timer = window.setInterval(() => {
+    // Se mantiene activo durante toda la sesión porque app.js reconstruye la
+    // capa de zonas al cambiar entre niveles. El costo es mínimo (dos zonas).
+    window.setInterval(() => {
       bindBackButton();
-      const layerHookReady = installLayerHook();
+      installLayerHook();
       enhanceCurrentNicheZoneLayer();
+    }, 750);
 
-      if (layerHookReady && Date.now() - startedAt > 1500) {
-        window.clearInterval(timer);
-      } else if (Date.now() - startedAt > 15000) {
-        window.clearInterval(timer);
-      }
-    }, 250);
-
-    console.info('[Mapa] Integracion de Nichos V2: Volver + hover de zonas instalada.');
+    console.info('[Mapa] Integración Nichos V2: Volver + hover persistente instalada.');
   }
 
   install();
