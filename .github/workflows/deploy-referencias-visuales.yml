@@ -1,0 +1,87 @@
+name: Publicar referencias visuales del Mapa
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-mapa-referencias-visuales
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publicar JS y fotos Americano/VIP
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Validar archivos
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s section-visual-references.js
+          test -s assets/americano-01.webp
+          test -s assets/americano-02.webp
+          test -s assets/americano-03.webp
+          test -s assets/americano-04.webp
+          test -s assets/vip-01.webp
+          test -s assets/vip-02.webp
+          test -s assets/vip-03.webp
+          echo "JS y 7 imagenes validados correctamente."
+
+      - name: Instalar cliente FTPS
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lftp
+
+      - name: Publicar referencias visuales en cPanel
+        shell: bash
+        env:
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          for attempt in 1 2 3; do
+            echo "[referencias visuales] intento ${attempt} de 3"
+
+            if timeout --kill-after=10s 180s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
+              set cmd:fail-exit yes;
+              set ftp:passive-mode true;
+              set ftp:ssl-force true;
+              set ftp:ssl-protect-data true;
+              set ftp:ssl-auth TLS;
+              set ftp:sync-mode true;
+              set ssl:verify-certificate yes;
+              set ssl:check-hostname yes;
+              set net:timeout 30;
+              set net:max-retries 1;
+              cls -ld assets;
+              put 'section-visual-references.js' -o 'section-visual-references.js';
+              put 'assets/americano-01.webp' -o 'assets/americano-01.webp';
+              put 'assets/americano-02.webp' -o 'assets/americano-02.webp';
+              put 'assets/americano-03.webp' -o 'assets/americano-03.webp';
+              put 'assets/americano-04.webp' -o 'assets/americano-04.webp';
+              put 'assets/vip-01.webp' -o 'assets/vip-01.webp';
+              put 'assets/vip-02.webp' -o 'assets/vip-02.webp';
+              put 'assets/vip-03.webp' -o 'assets/vip-03.webp';
+              bye;
+            "; then
+              echo "Referencias visuales publicadas correctamente."
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Transferencia fallida. Reintento en 12 segundos..."
+              sleep 12
+            fi
+          done
+
+          echo "ERROR: no fue posible publicar las referencias visuales despues de 3 intentos."
+          exit 1
