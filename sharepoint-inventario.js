@@ -116,9 +116,6 @@
 
   async function redirectAndWait(action) {
     await action();
-
-    // Los métodos redirect normalmente navegan de inmediato. Este Promise evita
-    // que el Mapa continúe con datos incompletos si el navegador tarda en salir.
     return new Promise(function () {});
   }
 
@@ -233,8 +230,6 @@
   function resolveStatus(fields) {
     if (isFalse(fields.Esta_Construida)) return "por_construir";
 
-    // Uso/ocupación manda sobre venta. Una propiedad puede estar vendida y,
-    // al mismo tiempo, ya tener inhumaciones o depósitos de cenizas.
     const hasUsage = number(fields.Uso_Inhumacion) > 0 || number(fields.Usos_Cenizas) > 0;
     if (hasUsage) return "utilizado";
 
@@ -267,18 +262,6 @@
       : codigoRaw.toUpperCase();
   
     let manzanaMapa = manzanaRaw;
-  
-    /*
-     * SharePoint maneja nichos como:
-     *   Codigo = 1
-     *   Manzana = A1
-     *
-     * El GeoJSON del mapa los identifica como:
-     *   PLN-01-A
-     *
-     * Si la parte numérica de Manzana coincide con Codigo,
-     * utilizamos solamente la parte alfabética.
-     */
     const manzanaMatch = manzanaRaw.match(/^([A-Z]+)0*(\d+)$/);
   
     if (
@@ -311,12 +294,16 @@
       zonaId: zonaId,
       cara: text(fields.Cara),
       codigo: codigo,
+
+      // Preservamos los campos originales de SharePoint para que el preview
+      // V2 pueda cruzar nichos usando la misma lógica del repositorio fuente:
+      // zona + cara + manzana/bloque + Codigo original.
+      codigo_origen: text(fields.Codigo),
+      title_origen: text(fields.Title),
+
       estatus: resolveStatus(fields),
       referencia_procap: text(fields.Referencia_ProcaP),
       observaciones: text(fields.Observaciones || fields.Observacion_Automatizacion),
-
-      // Campos adicionales de SharePoint. El Mapa actual ignora los que no usa,
-      // pero quedan disponibles para mostrar capacidad y trazabilidad después.
       clave_propiedad: text(fields.Clave_Propiedad),
       clave_busqueda_principal: text(fields.Clave_Busqueda_Principal),
       claves_busqueda_alternas: text(fields.Claves_Busqueda_Alternas),
