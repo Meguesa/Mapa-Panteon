@@ -33,13 +33,15 @@ def inject_preview_assets() -> None:
     source = source.replace(
         '<link rel="stylesheet" href="./portal-integration.css?v=5" />',
         '<link rel="stylesheet" href="./portal-integration.css?v=5" />\n'
-        '  <link rel="stylesheet" href="./nichos-v2-preview.css?v=1" />',
+        '  <link rel="stylesheet" href="./nichos-v2-preview.css?v=2" />',
         1,
     )
 
     source = source.replace(
         "</body>",
-        '  <script src="./nichos-v2-preview.js?v=1"></script>\n</body>',
+        '  <script src="./nichos-v2-preview.js?v=2"></script>\n'
+        '  <script src="./nichos-v2-map-integration.js?v=2"></script>\n'
+        '</body>',
         1,
     )
 
@@ -59,6 +61,7 @@ def main() -> None:
 
     shutil.copy2(ROOT / "nichos-v2-preview.js", DEPLOY / "nichos-v2-preview.js")
     shutil.copy2(ROOT / "nichos-v2-preview.css", DEPLOY / "nichos-v2-preview.css")
+    shutil.copy2(ROOT / "nichos-v2-map-integration.js", DEPLOY / "nichos-v2-map-integration.js")
 
     # Las imágenes antiguas de nichos son muy pesadas y no son necesarias para
     # este preview. Se sustituyen por las imágenes normalizadas de V2.
@@ -75,6 +78,7 @@ def main() -> None:
         DEPLOY / "index.php",
         DEPLOY / "nichos-v2-preview.js",
         DEPLOY / "nichos-v2-preview.css",
+        DEPLOY / "nichos-v2-map-integration.js",
         DEPLOY / "assets/PLN-concavo.png",
         DEPLOY / "assets/PLN-convexo.png",
         DEPLOY / "assets/SPN-concavo.png",
