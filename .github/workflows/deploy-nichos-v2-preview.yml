@@ -117,8 +117,11 @@ jobs:
               set ssl:check-hostname yes;
               set net:timeout 30;
               set net:max-retries 1;
-              mkdir -p '$REMOTE_DIR';
-              mirror -R --verbose=1 --parallel=2 --exclude-glob '.git*' --exclude-glob 'assets/nichos/**' deploy/ '$REMOTE_DIR'/;
+              set cmd:fail-exit no;
+              mkdir '$REMOTE_DIR';
+              set cmd:fail-exit yes;
+              cd '$REMOTE_DIR';
+              mirror -R --verbose=1 --parallel=2 --exclude-glob '.git*' --exclude-glob 'assets/nichos/**' deploy/ ./;
               bye;
             "; then
               echo "Preview publicado correctamente en /mapa/$REMOTE_DIR/"
