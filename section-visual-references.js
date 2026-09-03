@@ -12,10 +12,10 @@
       description: 'Así se ven los lotes tipo jardín Americano dentro del parque.',
       sections: new Set(['PLATINO', 'PLATINO 2', 'ORO', 'PLATA', 'PLATA 2', 'BRONCE']),
       images: [
-        './assets/referencias/lotes-americano/americano-01.webp',
-        './assets/referencias/lotes-americano/americano-02.webp',
-        './assets/referencias/lotes-americano/americano-03.webp',
-        './assets/referencias/lotes-americano/americano-04.webp'
+        './assets/americano-01.webp',
+        './assets/americano-02.webp',
+        './assets/americano-03.webp',
+        './assets/americano-04.webp'
       ]
     },
     vip: {
@@ -24,9 +24,9 @@
       description: 'Así se ven los lotes VIP ubicados en plazoletas dentro del parque.',
       sections: new Set(['SAN JUAN VIP', 'SAN MATEO VIP', 'SAN PEDRO VIP']),
       images: [
-        './assets/referencias/lotes-vip/vip-01.webp',
-        './assets/referencias/lotes-vip/vip-02.webp',
-        './assets/referencias/lotes-vip/vip-03.webp'
+        './assets/vip-01.webp',
+        './assets/vip-02.webp',
+        './assets/vip-03.webp'
       ]
     }
   };
