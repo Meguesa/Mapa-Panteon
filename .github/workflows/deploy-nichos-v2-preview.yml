@@ -1,0 +1,135 @@
+name: Publicar preview Nichos V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-nichos-v2-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    name: Construir y publicar preview de Nichos V2
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Preparar PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar MSAL local para produccion
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp-msal
+          npm install --prefix .tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
+
+      - name: Construir preview aislado
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/build_nichos_v2_preview.py
+          mkdir -p deploy/vendor
+          cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
+          rm -rf .tmp-msal
+
+      - name: Validar preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s deploy/index.php
+          test -s deploy/app.js
+          test -s deploy/styles.css
+          test -s deploy/nichos-v2-preview.js
+          test -s deploy/nichos-v2-preview.css
+          test -s deploy/assets/map/base-public.webp
+          test -s deploy/assets/PLN-concavo.png
+          test -s deploy/assets/PLN-convexo.png
+          test -s deploy/assets/SPN-concavo.png
+          test -s deploy/data/PLN-concavo.geojson
+          test -s deploy/data/PLN-convexo.geojson
+          test -s deploy/data/SPN-concavo.geojson
+          test -s deploy/data/nichos-zonas.geojson
+          test -s deploy/data/inventario-base.json
+          test -s deploy/vendor/msal-browser.min.js
+          php -l deploy/index.php
+          grep -q 'nichos-v2-preview.css' deploy/index.php
+          grep -q 'nichos-v2-preview.js' deploy/index.php
+          grep -q 'dirname(__DIR__, 2)' deploy/index.php
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          for name in [
+              'PLN-concavo.geojson',
+              'PLN-convexo.geojson',
+              'SPN-concavo.geojson',
+          ]:
+              path = Path('deploy/data') / name
+              with path.open('r', encoding='utf-8') as fh:
+                  data = json.load(fh)
+              if data.get('type') != 'FeatureCollection' or not data.get('features'):
+                  raise SystemExit(f'GeoJSON V2 inválido o vacío: {path}')
+              print(f'{name}: {len(data["features"])} nichos')
+          PY
+
+      - name: Instalar cliente FTPS
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lftp
+
+      - name: Publicar en carpeta aislada de cPanel
+        shell: bash
+        env:
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          REMOTE_DIR="preview-nichos-v2"
+
+          for attempt in 1 2 3; do
+            echo "[preview nichos V2] intento ${attempt} de 3"
+
+            if timeout --kill-after=15s 420s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
+              set cmd:fail-exit yes;
+              set ftp:passive-mode true;
+              set ftp:ssl-force true;
+              set ftp:ssl-protect-data true;
+              set ftp:ssl-auth TLS;
+              set ssl:verify-certificate yes;
+              set ssl:check-hostname yes;
+              set net:timeout 30;
+              set net:max-retries 1;
+              mkdir -p '$REMOTE_DIR';
+              mirror -R --verbose=1 --parallel=2 --exclude-glob '.git*' --exclude-glob 'assets/nichos/**' deploy/ '$REMOTE_DIR'/;
+              bye;
+            "; then
+              echo "Preview publicado correctamente en /mapa/$REMOTE_DIR/"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Transferencia fallida. Reintento en 15 segundos..."
+              sleep 15
+            fi
+          done
+
+          echo "ERROR: no fue posible publicar el preview después de 3 intentos."
+          exit 1
