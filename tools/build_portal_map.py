@@ -113,11 +113,19 @@ def copy_files() -> None:
         ROOT / "index.html",
         ROOT / "sharepoint-inventario.js",
         ROOT / "public-ui-fixes.js",
+        ROOT / "section-visual-references.js",
         ROOT / "portal-integration.css",
         ROOT / "account-menu.css",
         ROOT / "mapa-enhancements.js",
         ROOT / "assets/map/base-public.webp",
         ROOT / "assets/logo.jpg",
+        ROOT / "assets/americano-01.webp",
+        ROOT / "assets/americano-02.webp",
+        ROOT / "assets/americano-03.webp",
+        ROOT / "assets/americano-04.webp",
+        ROOT / "assets/vip-01.webp",
+        ROOT / "assets/vip-02.webp",
+        ROOT / "assets/vip-03.webp",
     ]
     required_dirs = [
         ROOT / "data",
@@ -135,6 +143,7 @@ def copy_files() -> None:
         "styles.css",
         "sharepoint-inventario.js",
         "public-ui-fixes.js",
+        "section-visual-references.js",
         "portal-integration.css",
         "account-menu.css",
         "mapa-enhancements.js",
@@ -145,6 +154,16 @@ def copy_files() -> None:
     (assets_dir / "map").mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / "assets/map/base-public.webp", assets_dir / "map/base-public.webp")
     shutil.copy2(ROOT / "assets/logo.jpg", assets_dir / "logo.jpg")
+    for name in [
+        "americano-01.webp",
+        "americano-02.webp",
+        "americano-03.webp",
+        "americano-04.webp",
+        "vip-01.webp",
+        "vip-02.webp",
+        "vip-03.webp",
+    ]:
+        shutil.copy2(ROOT / "assets" / name, assets_dir / name)
     shutil.copytree(ROOT / "assets/nichos", assets_dir / "nichos")
     shutil.copytree(ROOT / "data", TARGET_DIR / "data")
 
@@ -160,7 +179,6 @@ def build_index() -> None:
         re.DOTALL | re.IGNORECASE,
     )
 
-    # El comentario del archivo fuente usa acentos. Manejamos ambas variantes.
     if not msal_pattern.search(source):
         msal_pattern = re.compile(
             r'\s*<!-- Microsoft Authentication Library -->\s*'
@@ -277,7 +295,6 @@ def build_index() -> None:
 
 declare(strict_types=1);
 
-// Unica dependencia compartida con el Portal: autenticacion/sesion.
 require_once dirname(__DIR__) . '/includes/bootstrap.php';
 portal_require_authentication();
 
