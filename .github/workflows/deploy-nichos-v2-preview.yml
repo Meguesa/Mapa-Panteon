@@ -14,7 +14,7 @@ jobs:
   deploy-preview:
     name: Construir y publicar preview de Nichos V2
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
 
     steps:
       - name: Descargar repositorio
@@ -54,9 +54,10 @@ jobs:
           test -s deploy/index.php
           test -s deploy/app.js
           test -s deploy/styles.css
+          test -s deploy/sharepoint-inventario.js
           test -s deploy/nichos-v2-preview.js
           test -s deploy/nichos-v2-preview.css
-          test -s deploy/assets/map/base-public.webp
+          test -s deploy/nichos-v2-map-integration.js
           test -s deploy/assets/PLN-concavo.png
           test -s deploy/assets/PLN-convexo.png
           test -s deploy/assets/SPN-concavo.png
@@ -64,8 +65,6 @@ jobs:
           test -s deploy/data/PLN-convexo.geojson
           test -s deploy/data/SPN-concavo.geojson
           test -s deploy/data/nichos-zonas.geojson
-          test -s deploy/data/inventario-base.json
-          test -s deploy/vendor/msal-browser.min.js
           php -l deploy/index.php
           grep -q 'nichos-v2-preview.css' deploy/index.php
           grep -q 'nichos-v2-preview.js' deploy/index.php
@@ -84,7 +83,7 @@ jobs:
               with path.open('r', encoding='utf-8') as fh:
                   data = json.load(fh)
               if data.get('type') != 'FeatureCollection' or not data.get('features'):
-                  raise SystemExit(f'GeoJSON V2 inválido o vacío: {path}')
+                  raise SystemExit(f'GeoJSON V2 invalido o vacio: {path}')
               print(f'{name}: {len(data["features"])} nichos')
           PY
 
@@ -94,7 +93,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lftp
 
-      - name: Publicar en carpeta aislada de cPanel
+      - name: Publicar actualizacion incremental en cPanel
         shell: bash
         env:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -105,34 +104,44 @@ jobs:
           REMOTE_DIR="preview-nichos-v2"
 
           for attempt in 1 2 3; do
-            echo "[preview nichos V2] intento ${attempt} de 3"
+            echo "[preview nichos V2] actualizacion incremental, intento ${attempt} de 3"
 
-            if timeout --kill-after=15s 420s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
+            if timeout --kill-after=15s 240s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
               set cmd:fail-exit yes;
               set ftp:passive-mode true;
               set ftp:ssl-force true;
               set ftp:ssl-protect-data true;
               set ftp:ssl-auth TLS;
+              set ftp:sync-mode true;
               set ssl:verify-certificate yes;
               set ssl:check-hostname yes;
               set net:timeout 30;
-              set net:max-retries 1;
-              set cmd:fail-exit no;
-              mkdir '$REMOTE_DIR';
-              set cmd:fail-exit yes;
+              set net:max-retries 2;
               cd '$REMOTE_DIR';
-              mirror -R --verbose=1 --parallel=2 --exclude-glob '.git*' --exclude-glob 'assets/nichos/**' deploy/ ./;
+              put 'deploy/index.php' -o 'index.php';
+              put 'deploy/app.js' -o 'app.js';
+              put 'deploy/sharepoint-inventario.js' -o 'sharepoint-inventario.js';
+              put 'deploy/nichos-v2-preview.js' -o 'nichos-v2-preview.js';
+              put 'deploy/nichos-v2-preview.css' -o 'nichos-v2-preview.css';
+              put 'deploy/nichos-v2-map-integration.js' -o 'nichos-v2-map-integration.js';
+              put 'deploy/data/nichos-zonas.geojson' -o 'data/nichos-zonas.geojson';
+              put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
+              put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
+              put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
+              put 'deploy/assets/PLN-concavo.png' -o 'assets/PLN-concavo.png';
+              put 'deploy/assets/PLN-convexo.png' -o 'assets/PLN-convexo.png';
+              put 'deploy/assets/SPN-concavo.png' -o 'assets/SPN-concavo.png';
               bye;
             "; then
-              echo "Preview publicado correctamente en /mapa/$REMOTE_DIR/"
+              echo "Preview Nichos V2 actualizado correctamente en /mapa/$REMOTE_DIR/"
               exit 0
             fi
 
             if [ "$attempt" -lt 3 ]; then
-              echo "Transferencia fallida. Reintento en 15 segundos..."
+              echo "Transferencia incremental fallida. Reintento en 15 segundos..."
               sleep 15
             fi
           done
 
-          echo "ERROR: no fue posible publicar el preview después de 3 intentos."
+          echo "ERROR: no fue posible publicar la actualizacion incremental despues de 3 intentos."
           exit 1
