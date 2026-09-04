@@ -2,7 +2,6 @@
   'use strict';
 
   const ENHANCED_FLAG = '__nichosV2HoverEnhanced';
-  let lastLayerRef = null;
 
   function isPreviewOpen() {
     return Boolean(document.getElementById('nichosV2Preview')?.classList.contains('is-open'));
@@ -24,41 +23,11 @@
 
   function bindBackButton() {
     const button = document.getElementById('backBtn');
-    if (!button || button.dataset.nichosV2BackBound === '1') return;
+    if (!button || button.dataset.nichosV2BackBound === '1') return false;
 
     button.dataset.nichosV2BackBound = '1';
     button.addEventListener('click', closePreviewFromBack, true);
-  }
-
-  function ensurePanelControls() {
-    const modal = document.getElementById('nichosV2Preview');
-    if (!modal) return;
-
-    const firstSection = modal.querySelector('.nv2-panel .nv2-panel-section:first-child');
-    if (!firstSection) return;
-
-    if (!firstSection.querySelector('.nv2-panel-close')) {
-      const closeButton = document.createElement('button');
-      closeButton.type = 'button';
-      closeButton.className = 'nv2-panel-close';
-      closeButton.textContent = 'Cerrar';
-      closeButton.addEventListener('click', () => window.NICHOS_V2_PREVIEW?.close?.());
-      firstSection.appendChild(closeButton);
-    }
-
-    const filterSection = modal.querySelector('#nv2Filters')?.closest('.nv2-panel-section');
-    if (filterSection && !filterSection.querySelector('.nv2-panel-current-filter')) {
-      const current = document.createElement('p');
-      current.className = 'nv2-panel-current-filter';
-      current.innerHTML = 'Filtro actual: <b>todos</b>';
-      filterSection.appendChild(current);
-    }
-
-    const activeFilter = modal.querySelector('#nv2Filters .nv2-filter.active');
-    const currentFilter = filterSection?.querySelector('.nv2-panel-current-filter b');
-    if (currentFilter) {
-      currentFilter.textContent = activeFilter?.dataset?.filter || 'todos';
-    }
+    return true;
   }
 
   function zoneLabel(feature) {
@@ -109,10 +78,6 @@
         return false;
       }
 
-      if (lastLayerRef !== nichosZonasLayerPublic) {
-        lastLayerRef = nichosZonasLayerPublic;
-      }
-
       nichosZonasLayerPublic.eachLayer(enhanceLayer);
       try { nichosZonasLayerPublic.bringToFront(); } catch {}
       return true;
@@ -144,45 +109,29 @@
     }
   }
 
-  function observePreviewDom() {
-    if (window.__nichosV2DomObserverInstalled) return;
-    window.__nichosV2DomObserverInstalled = true;
-
-    const observer = new MutationObserver(() => {
-      bindBackButton();
-      ensurePanelControls();
-    });
-
-    observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
-  }
-
   function install() {
     bindBackButton();
     installLayerHook();
     enhanceCurrentNicheZoneLayer();
-    ensurePanelControls();
-    observePreviewDom();
 
-    // Reintento corto solo durante el arranque por si app.js todavía no creó
-    // las capas. A diferencia de la versión anterior, no dejamos un intervalo
-    // permanente ejecutándose cada medio segundo.
+    // Solo reintentamos durante el arranque para esperar a que app.js haya
+    // creado el boton Volver y la capa de zonas. No usamos setInterval ni
+    // MutationObserver permanentes: ambos provocaban trabajo innecesario y el
+    // observer anterior podia entrar en un ciclo de mutaciones al abrir Nichos.
     let attempts = 0;
     const retryStartup = () => {
       attempts += 1;
-      bindBackButton();
+      const backReady = bindBackButton() || Boolean(document.getElementById('backBtn')?.dataset.nichosV2BackBound);
       const hookReady = installLayerHook();
       const layerReady = enhanceCurrentNicheZoneLayer();
 
-      if ((!hookReady || !layerReady) && attempts < 12) {
+      if ((!backReady || !hookReady || !layerReady) && attempts < 20) {
         window.setTimeout(retryStartup, 250);
       }
     };
-    window.setTimeout(retryStartup, 100);
 
-    console.info('[Mapa] Integración Nichos V2: panel, Volver y hover instalados sin polling continuo.');
+    window.setTimeout(retryStartup, 100);
+    console.info('[Mapa] Integracion Nichos V2 instalada sin polling ni MutationObserver.');
   }
 
   install();
