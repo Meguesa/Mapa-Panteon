@@ -57,8 +57,7 @@
     const activeFilter = modal.querySelector('#nv2Filters .nv2-filter.active');
     const currentFilter = filterSection?.querySelector('.nv2-panel-current-filter b');
     if (currentFilter) {
-      const raw = activeFilter?.dataset?.filter || 'todos';
-      currentFilter.textContent = raw;
+      currentFilter.textContent = activeFilter?.dataset?.filter || 'todos';
     }
   }
 
@@ -135,7 +134,6 @@
         const result = originalRender.apply(this, arguments);
         window.setTimeout(enhanceCurrentNicheZoneLayer, 0);
         window.setTimeout(enhanceCurrentNicheZoneLayer, 100);
-        window.setTimeout(enhanceCurrentNicheZoneLayer, 400);
         return result;
       };
 
@@ -146,20 +144,45 @@
     }
   }
 
+  function observePreviewDom() {
+    if (window.__nichosV2DomObserverInstalled) return;
+    window.__nichosV2DomObserverInstalled = true;
+
+    const observer = new MutationObserver(() => {
+      bindBackButton();
+      ensurePanelControls();
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
   function install() {
     bindBackButton();
     installLayerHook();
     enhanceCurrentNicheZoneLayer();
     ensurePanelControls();
+    observePreviewDom();
 
-    window.setInterval(() => {
+    // Reintento corto solo durante el arranque por si app.js todavía no creó
+    // las capas. A diferencia de la versión anterior, no dejamos un intervalo
+    // permanente ejecutándose cada medio segundo.
+    let attempts = 0;
+    const retryStartup = () => {
+      attempts += 1;
       bindBackButton();
-      installLayerHook();
-      enhanceCurrentNicheZoneLayer();
-      ensurePanelControls();
-    }, 500);
+      const hookReady = installLayerHook();
+      const layerReady = enhanceCurrentNicheZoneLayer();
 
-    console.info('[Mapa] Integración Nichos V2: panel, Volver y hover persistente instalados.');
+      if ((!hookReady || !layerReady) && attempts < 12) {
+        window.setTimeout(retryStartup, 250);
+      }
+    };
+    window.setTimeout(retryStartup, 100);
+
+    console.info('[Mapa] Integración Nichos V2: panel, Volver y hover instalados sin polling continuo.');
   }
 
   install();
