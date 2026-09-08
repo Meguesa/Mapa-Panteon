@@ -58,10 +58,10 @@ jobs:
           test -s deploy/nichos-v2-preview.js
           test -s deploy/nichos-v2-preview.css
           test -s deploy/nichos-v2-map-integration.js
-          test -s deploy/assets/PLN-concavo.png
-          test -s deploy/assets/PLN-convexo.png
-          test -s deploy/assets/SPN-concavo.png
-          test -s deploy/assets/SPN-convexo.png
+          test -s deploy/assets/PLN-concavo.svg
+          test -s deploy/assets/PLN-convexo.svg
+          test -s deploy/assets/SPN-concavo.svg
+          test -s deploy/assets/SPN-convexo.svg
           test -s deploy/data/PLN-concavo.geojson
           test -s deploy/data/PLN-convexo.geojson
           test -s deploy/data/SPN-concavo.geojson
@@ -73,6 +73,7 @@ jobs:
           grep -q 'dirname(__DIR__, 2)' deploy/index.php
           grep -q 'SPN-convexo' deploy/nichos-v2-preview.js
           grep -q "block !== 'JP'" deploy/nichos-v2-preview.js
+          grep -q 'SPN-convexo.svg' deploy/nichos-v2-preview.js
 
           python3 - <<'PY'
           import json
@@ -138,10 +139,10 @@ jobs:
               put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
               put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
               put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
-              put 'deploy/assets/PLN-concavo.png' -o 'assets/PLN-concavo.png';
-              put 'deploy/assets/PLN-convexo.png' -o 'assets/PLN-convexo.png';
-              put 'deploy/assets/SPN-concavo.png' -o 'assets/SPN-concavo.png';
-              put 'deploy/assets/SPN-convexo.png' -o 'assets/SPN-convexo.png';
+              put 'deploy/assets/PLN-concavo.svg' -o 'assets/PLN-concavo.svg';
+              put 'deploy/assets/PLN-convexo.svg' -o 'assets/PLN-convexo.svg';
+              put 'deploy/assets/SPN-concavo.svg' -o 'assets/SPN-concavo.svg';
+              put 'deploy/assets/SPN-convexo.svg' -o 'assets/SPN-convexo.svg';
               bye;
             "; then
               echo "Preview Nichos V2 actualizado correctamente en /mapa/$REMOTE_DIR/"
