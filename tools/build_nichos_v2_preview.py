@@ -1,29 +1,183 @@
 from pathlib import Path
+import base64
+import json
 import shutil
-import urllib.request
 
 import build_portal_map
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy"
+ASSET_SOURCE = ROOT / "assets" / "nichos-v2-src"
 
-V2_RAW = "https://raw.githubusercontent.com/Sabbathycal/Mapa-Panteon/V2"
+ASSETS = [
+    "PLN-concavo.png",
+    "PLN-convexo.png",
+    "SPN-concavo.png",
+    "SPN-convexo.png",
+]
 
-FILES = {
-    "assets/PLN-concavo.png": f"{V2_RAW}/src/assets/images/nichos/normalizadas/PLN-concavo.png",
-    "assets/PLN-convexo.png": f"{V2_RAW}/src/assets/images/nichos/normalizadas/PLN-convexo.png",
-    "assets/SPN-concavo.png": f"{V2_RAW}/src/assets/images/nichos/normalizadas/SPN-concavo.png",
-    "data/PLN-concavo.geojson": f"{V2_RAW}/src/assets/data/nichos/PLN-concavo.geojson",
-    "data/PLN-convexo.geojson": f"{V2_RAW}/src/assets/data/nichos/PLN-convexo.geojson",
-    "data/SPN-concavo.geojson": f"{V2_RAW}/src/assets/data/nichos/SPN-concavo.geojson",
+STANDARD_GRIDS = {
+    "PLN-concavo": {
+        "zone": "PLN", "side": "concavo", "height": 201,
+        "x0": 14.0, "x1": 2034.0, "y0": 22.0, "y1": 192.0,
+        "rows": ["A", "B", "C", "D", "E", "F"], "columns": 67,
+    },
+    "PLN-convexo": {
+        "zone": "PLN", "side": "convexo", "height": 176,
+        "x0": 12.0, "x1": 2034.0, "y0": 20.0, "y1": 164.0,
+        "rows": ["AX", "BX", "CX", "DX", "EX", "FX"], "columns": 79,
+    },
+    "SPN-concavo": {
+        "zone": "SPN", "side": "concavo", "height": 251,
+        "x0": 31.0, "x1": 2009.0, "y0": 23.0, "y1": 237.0,
+        "rows": ["A", "B", "C", "D", "E", "F"], "columns": 51,
+    },
+}
+
+SPN_CONVEXO = {
+    "zone": "SPN", "side": "convexo", "height": 219,
+    "x0": 22.0, "x1": 2034.0, "y0": 20.0, "y1": 207.0,
+    "rows": ["AX", "BX", "CX", "DX", "EX", "FX"],
+    # 25 columnas normales + 9 columnas JP + 26 columnas normales.
+    "visual_columns": 60,
 }
 
 
-def download(url: str, destination: Path) -> None:
+def decode_asset(name: str) -> None:
+    parts = sorted(ASSET_SOURCE.glob(f"{name}.b64.*"))
+    if not parts:
+        raise RuntimeError(f"No se encontraron partes base64 para {name}")
+
+    encoded = "".join(part.read_text(encoding="ascii").strip() for part in parts)
+    try:
+        payload = base64.b64decode(encoded, validate=True)
+    except Exception as exc:
+        raise RuntimeError(f"Base64 invalido para {name}: {exc}") from exc
+
+    if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise RuntimeError(f"El recurso {name} no es un PNG valido")
+
+    destination = DEPLOY / "assets" / name
     destination.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(url, headers={"User-Agent": "JdJP-Mapa-Preview/1.0"})
-    with urllib.request.urlopen(request, timeout=60) as response:
-        destination.write_bytes(response.read())
+    destination.write_bytes(payload)
+
+
+def polygon_from_pixels(height: float, left: float, right: float, top: float, bottom: float):
+    # Leaflet CRS.Simple usa Y hacia arriba; la imagen usa Y hacia abajo.
+    y_top = height - top
+    y_bottom = height - bottom
+    return [[
+        [round(left, 6), round(y_top, 6)],
+        [round(right, 6), round(y_top, 6)],
+        [round(right, 6), round(y_bottom, 6)],
+        [round(left, 6), round(y_bottom, 6)],
+        [round(left, 6), round(y_top, 6)],
+    ]]
+
+
+def make_feature(zone: str, side: str, row: str, number: int, grid_row: int, grid_column: int,
+                 height: float, left: float, right: float, top: float, bottom: float):
+    code = f"{number}{row}"
+    return {
+        "type": "Feature",
+        "properties": {
+            "id": f"{zone}-{side}-{code}",
+            "tipo": "nicho",
+            "zonaId": zone,
+            "cara": side,
+            "fila": row,
+            "numero": number,
+            "codigo": code,
+            "estatus_venta": "",
+            "estatus_ocupacion": "",
+            "referencia_procap": "",
+            "observaciones": "",
+            "geometryType": "niches",
+            "gridRow": grid_row,
+            "gridColumn": grid_column,
+        },
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": polygon_from_pixels(height, left, right, top, bottom),
+        },
+    }
+
+
+def generate_standard_grid(spec: dict):
+    row_count = len(spec["rows"])
+    col_count = spec["columns"]
+    cell_w = (spec["x1"] - spec["x0"]) / col_count
+    cell_h = (spec["y1"] - spec["y0"]) / row_count
+    features = []
+
+    for r, row in enumerate(spec["rows"]):
+        top = spec["y0"] + r * cell_h
+        bottom = spec["y0"] + (r + 1) * cell_h
+        for c in range(col_count):
+            left = spec["x0"] + c * cell_w
+            right = spec["x0"] + (c + 1) * cell_w
+            features.append(make_feature(
+                spec["zone"], spec["side"], row, c + 1, r, c,
+                spec["height"], left, right, top, bottom,
+            ))
+
+    return {"type": "FeatureCollection", "features": features}
+
+
+def generate_spn_convexo():
+    spec = SPN_CONVEXO
+    cell_w = (spec["x1"] - spec["x0"]) / spec["visual_columns"]
+    cell_h = (spec["y1"] - spec["y0"]) / len(spec["rows"])
+    features = []
+
+    for r, row in enumerate(spec["rows"]):
+        top = spec["y0"] + r * cell_h
+        bottom = spec["y0"] + (r + 1) * cell_h
+
+        # Izquierda: 1AX..25FX.
+        for number in range(1, 26):
+            c = number - 1
+            left = spec["x0"] + c * cell_w
+            right = spec["x0"] + (c + 1) * cell_w
+            features.append(make_feature(
+                spec["zone"], spec["side"], row, number, r, c,
+                spec["height"], left, right, top, bottom,
+            ))
+
+        # Centro: 54 nichos JP, 9 por fila (1JP..54JP).
+        for j in range(9):
+            c = 25 + j
+            number = r * 9 + j + 1
+            left = spec["x0"] + c * cell_w
+            right = spec["x0"] + (c + 1) * cell_w
+            features.append(make_feature(
+                spec["zone"], spec["side"], "JP", number, r, c,
+                spec["height"], left, right, top, bottom,
+            ))
+
+        # Derecha: 26AX..51FX.
+        for number in range(26, 52):
+            c = 34 + (number - 26)
+            left = spec["x0"] + c * cell_w
+            right = spec["x0"] + (c + 1) * cell_w
+            features.append(make_feature(
+                spec["zone"], spec["side"], row, number, r, c,
+                spec["height"], left, right, top, bottom,
+            ))
+
+    return {"type": "FeatureCollection", "features": features}
+
+
+def write_geojson(name: str, data: dict) -> None:
+    destination = DEPLOY / "data" / f"{name}.geojson"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
+
+def generate_geometries() -> None:
+    for name, spec in STANDARD_GRIDS.items():
+        write_geojson(name, generate_standard_grid(spec))
+    write_geojson("SPN-convexo", generate_spn_convexo())
 
 
 def patch_app_hover() -> None:
@@ -56,7 +210,7 @@ def patch_app_hover() -> None:
 
 
 def patch_sharepoint_niche_codes() -> None:
-    """Alinea el código derivado de nichos con la nomenclatura oficial de 3 dígitos."""
+    """Alinea el codigo derivado de nichos con la nomenclatura oficial de 3 digitos."""
     path = DEPLOY / "sharepoint-inventario.js"
     source = path.read_text(encoding="utf-8")
 
@@ -71,9 +225,40 @@ def patch_sharepoint_niche_codes() -> None:
 
 
 def patch_preview_runtime() -> None:
-    """Adapta el preview V2 a la nomenclatura oficial de BI_Parque_Inventario."""
+    """Adapta el preview a las cuatro referencias visuales y a BI_Parque_Inventario."""
     path = DEPLOY / "nichos-v2-preview.js"
     source = path.read_text(encoding="utf-8")
+
+    old_spn = """    SPN: {
+      label: 'SAN PEDRO NICHOS',
+      sides: {
+        concavo: {
+          label: 'Cóncavo',
+          image: `${PREVIEW_ROOT}/assets/SPN-concavo.png`,
+          geometry: `${PREVIEW_ROOT}/data/SPN-concavo.geojson`,
+        },
+      },
+    },"""
+
+    new_spn = """    SPN: {
+      label: 'SAN PEDRO NICHOS',
+      sides: {
+        concavo: {
+          label: 'Cóncavo',
+          image: `${PREVIEW_ROOT}/assets/SPN-concavo.png`,
+          geometry: `${PREVIEW_ROOT}/data/SPN-concavo.geojson`,
+        },
+        convexo: {
+          label: 'Convexo',
+          image: `${PREVIEW_ROOT}/assets/SPN-convexo.png`,
+          geometry: `${PREVIEW_ROOT}/data/SPN-convexo.geojson`,
+        },
+      },
+    },"""
+
+    if old_spn not in source:
+        raise RuntimeError("No se encontro la configuracion SPN esperada en nichos-v2-preview.js")
+    source = source.replace(old_spn, new_spn, 1)
 
     old_identity = """    let block = row;
 
@@ -96,8 +281,9 @@ def patch_preview_runtime() -> None:
     new_identity = """    // Nomenclatura oficial de BI_Parque_Inventario:
     //   Cóncavo -> Manzana A..F
     //   Convexo -> Manzana AX..FX
+    //   Centro de San Pedro Convexo -> Manzana JP
     let block = row;
-    if (side === 'convexo' && block && !block.endsWith('X')) {
+    if (side === 'convexo' && block && block !== 'JP' && !block.endsWith('X')) {
       block = `${block}X`;
     }
 
@@ -115,7 +301,6 @@ def patch_preview_runtime() -> None:
 
     if old_identity not in source:
         raise RuntimeError("No se encontro la logica anterior de identidad de nichos V2")
-
     source = source.replace(old_identity, new_identity, 1)
 
     old_status = """  function getFeatureStatus(feature) {
@@ -133,7 +318,7 @@ def patch_preview_runtime() -> None:
     const inventory = getInventoryRecord(feature);
 
     // La fuente administrativa es SharePoint. Si no hay coincidencia, no
-    // tratamos el estatus estático del GeoJSON V2 como si fuera vigente.
+    // tratamos un valor estatico del GeoJSON como si fuera vigente.
     if (!inventory) return 'desconocido';
     if (inventory.estatus) return normalizeStatus(inventory.estatus);
 
@@ -142,7 +327,6 @@ def patch_preview_runtime() -> None:
 
     if old_status not in source:
         raise RuntimeError("No se encontro getFeatureStatus esperado en nichos-v2-preview.js")
-
     source = source.replace(old_status, new_status, 1)
 
     old_close = """  function closePreview() {
@@ -160,22 +344,28 @@ def patch_preview_runtime() -> None:
     state.selectedFeature = null;
     state.zoneFeature = null;
 
-    // El click que abre Nichos deja fijada la zona azul en el mapa principal.
-    // Reconstruir esta pequeña capa (PLN/SPN) limpia pinnedNichoZonaLayer y
-    // devuelve el mapa exactamente a su estado hover normal.
     try {
       if (typeof window.renderNichosZonasLayerPublic === 'function') {
         window.renderNichosZonasLayerPublic();
       }
     } catch (error) {
-      console.warn('[Nichos V2 Preview] No fue posible limpiar la selección de zona.', error);
+      console.warn('[Nichos V2 Preview] No fue posible limpiar la seleccion de zona.', error);
     }
   }"""
 
     if old_close not in source:
         raise RuntimeError("No se encontro closePreview esperado en nichos-v2-preview.js")
-
     source = source.replace(old_close, new_close, 1)
+
+    source = source.replace(
+        'Vista de prueba basada en Sabbathycal/Mapa-Panteon V2',
+        'Vista de prueba con referencias visuales actualizadas',
+    )
+    source = source.replace(
+        '${getZoneLabel(zoneFeature, zoneId)} · geometría V2 sobre fotografía normalizada',
+        '${getZoneLabel(zoneFeature, zoneId)} · rejilla interactiva sobre referencia visual actualizada',
+    )
+
     path.write_text(source, encoding="utf-8")
 
 
@@ -186,14 +376,14 @@ def inject_preview_assets() -> None:
     source = source.replace(
         '<link rel="stylesheet" href="./portal-integration.css?v=5" />',
         '<link rel="stylesheet" href="./portal-integration.css?v=5" />\n'
-        '  <link rel="stylesheet" href="./nichos-v2-preview.css?v=5" />',
+        '  <link rel="stylesheet" href="./nichos-v2-preview.css?v=6" />',
         1,
     )
 
     source = source.replace(
         "</body>",
-        '  <script src="./nichos-v2-preview.js?v=5"></script>\n'
-        '  <script src="./nichos-v2-map-integration.js?v=5"></script>\n'
+        '  <script src="./nichos-v2-preview.js?v=6"></script>\n'
+        '  <script src="./nichos-v2-map-integration.js?v=6"></script>\n'
         '</body>',
         1,
     )
@@ -223,9 +413,10 @@ def main() -> None:
     if legacy_niche_assets.exists():
         shutil.rmtree(legacy_niche_assets)
 
-    for relative_path, url in FILES.items():
-        download(url, DEPLOY / relative_path)
+    for name in ASSETS:
+        decode_asset(name)
 
+    generate_geometries()
     inject_preview_assets()
 
     required = [
@@ -238,16 +429,30 @@ def main() -> None:
         DEPLOY / "assets/PLN-concavo.png",
         DEPLOY / "assets/PLN-convexo.png",
         DEPLOY / "assets/SPN-concavo.png",
+        DEPLOY / "assets/SPN-convexo.png",
         DEPLOY / "data/PLN-concavo.geojson",
         DEPLOY / "data/PLN-convexo.geojson",
         DEPLOY / "data/SPN-concavo.geojson",
+        DEPLOY / "data/SPN-convexo.geojson",
     ]
 
     for path in required:
         if not path.is_file() or path.stat().st_size == 0:
-            raise RuntimeError(f"Archivo de preview faltante o vacío: {path}")
+            raise RuntimeError(f"Archivo de preview faltante o vacio: {path}")
 
-    print("Preview Nichos V2 preparado para /mapa/preview-nichos-v2/")
+    counts = {
+        "PLN-concavo": 6 * 67,
+        "PLN-convexo": 6 * 79,
+        "SPN-concavo": 6 * 51,
+        "SPN-convexo": (6 * 51) + 54,
+    }
+    for name, expected in counts.items():
+        data = json.loads((DEPLOY / "data" / f"{name}.geojson").read_text(encoding="utf-8"))
+        actual = len(data.get("features", []))
+        if actual != expected:
+            raise RuntimeError(f"Conteo inesperado en {name}: {actual} != {expected}")
+
+    print("Preview Nichos V2 preparado con cuatro referencias visuales locales.")
 
 
 if __name__ == "__main__":
