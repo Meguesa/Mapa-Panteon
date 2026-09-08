@@ -61,30 +61,39 @@ jobs:
           test -s deploy/assets/PLN-concavo.png
           test -s deploy/assets/PLN-convexo.png
           test -s deploy/assets/SPN-concavo.png
+          test -s deploy/assets/SPN-convexo.png
           test -s deploy/data/PLN-concavo.geojson
           test -s deploy/data/PLN-convexo.geojson
           test -s deploy/data/SPN-concavo.geojson
+          test -s deploy/data/SPN-convexo.geojson
           test -s deploy/data/nichos-zonas.geojson
           php -l deploy/index.php
           grep -q 'nichos-v2-preview.css' deploy/index.php
           grep -q 'nichos-v2-preview.js' deploy/index.php
           grep -q 'dirname(__DIR__, 2)' deploy/index.php
+          grep -q 'SPN-convexo' deploy/nichos-v2-preview.js
+          grep -q "block !== 'JP'" deploy/nichos-v2-preview.js
 
           python3 - <<'PY'
           import json
           from pathlib import Path
 
-          for name in [
-              'PLN-concavo.geojson',
-              'PLN-convexo.geojson',
-              'SPN-concavo.geojson',
-          ]:
+          expected = {
+              'PLN-concavo.geojson': 402,
+              'PLN-convexo.geojson': 474,
+              'SPN-concavo.geojson': 306,
+              'SPN-convexo.geojson': 360,
+          }
+          for name, expected_count in expected.items():
               path = Path('deploy/data') / name
               with path.open('r', encoding='utf-8') as fh:
                   data = json.load(fh)
-              if data.get('type') != 'FeatureCollection' or not data.get('features'):
-                  raise SystemExit(f'GeoJSON V2 invalido o vacio: {path}')
-              print(f'{name}: {len(data["features"])} nichos')
+              if data.get('type') != 'FeatureCollection':
+                  raise SystemExit(f'GeoJSON V2 invalido: {path}')
+              actual = len(data.get('features', []))
+              if actual != expected_count:
+                  raise SystemExit(f'Conteo invalido en {path}: {actual} != {expected_count}')
+              print(f'{name}: {actual} nichos')
           PY
 
       - name: Instalar cliente FTPS
@@ -128,9 +137,11 @@ jobs:
               put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
               put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
               put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
+              put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
               put 'deploy/assets/PLN-concavo.png' -o 'assets/PLN-concavo.png';
               put 'deploy/assets/PLN-convexo.png' -o 'assets/PLN-convexo.png';
               put 'deploy/assets/SPN-concavo.png' -o 'assets/SPN-concavo.png';
+              put 'deploy/assets/SPN-convexo.png' -o 'assets/SPN-convexo.png';
               bye;
             "; then
               echo "Preview Nichos V2 actualizado correctamente en /mapa/$REMOTE_DIR/"
