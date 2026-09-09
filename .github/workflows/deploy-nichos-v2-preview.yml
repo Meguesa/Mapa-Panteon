@@ -154,11 +154,15 @@ jobs:
           }
 
           run_lftp "preparar carpetas remotas" "
+            set cmd:fail-exit no;
             mkdir -p '${REMOTE_DIR}';
+            set cmd:fail-exit yes;
             cd '${REMOTE_DIR}';
+            set cmd:fail-exit no;
             mkdir -p data;
             mkdir -p assets;
             mkdir -p vendor;
+            set cmd:fail-exit yes;
           " 300
 
           run_lftp "publicar archivos base" "
