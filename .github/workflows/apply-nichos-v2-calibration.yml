@@ -1,0 +1,259 @@
+name: Aplicar calibracion Nichos V2
+
+on:
+  push:
+    branches:
+      - preview/nichos-v2-sabbathycal
+    paths:
+      - .github/workflows/apply-nichos-v2-calibration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+        with:
+          ref: preview/nichos-v2-sabbathycal
+          fetch-depth: 0
+
+      - name: Aplicar calibracion geometrica y modo imagen limpia
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          build_path = root / 'tools' / 'build_nichos_v2_preview.py'
+          build = build_path.read_text(encoding='utf-8')
+
+          config = '''STANDARD_GRIDS = {
+              "PLN-concavo": {
+                  "zone": "PLN", "side": "concavo", "height": 201,
+                  "rows": ["A", "B", "C", "D", "E", "F"], "columns": 67,
+                  # Limites medidos sobre los separadores reales de la fotografia.
+                  "x_anchors": {
+                      0: 15.0, 2: 75.0, 4: 135.5, 6: 196.0, 8: 256.0,
+                      10: 316.5, 12: 377.0, 14: 437.0, 16: 497.5, 18: 558.0,
+                      20: 618.0, 47: 1431.0, 49: 1491.0, 51: 1551.0,
+                      53: 1612.0, 55: 1672.0, 57: 1732.0, 59: 1793.0,
+                      61: 1853.0, 63: 1913.5, 65: 1974.0, 67: 2034.0,
+                  },
+                  "y_edges": [22.0, 48.0, 76.0, 104.0, 132.0, 160.0, 188.0],
+              },
+              "PLN-convexo": {
+                  "zone": "PLN", "side": "convexo", "height": 176,
+                  "rows": ["AX", "BX", "CX", "DX", "EX", "FX"], "columns": 79,
+                  "x_anchors": {
+                      0: 12.0, 2: 63.0, 3: 89.0, 4: 115.0, 5: 141.0,
+                      9: 243.0, 10: 269.0, 11: 295.0, 15: 397.0,
+                      16: 423.0, 17: 449.0, 22: 577.0, 23: 603.0,
+                      24: 629.0, 53: 1371.0, 54: 1396.0, 55: 1422.0,
+                      60: 1550.5, 61: 1576.0, 62: 1602.0, 66: 1704.5,
+                      67: 1730.0, 68: 1756.0, 72: 1858.5, 73: 1884.0,
+                      74: 1910.0, 75: 1936.0, 78: 2013.0, 79: 2038.0,
+                  },
+                  "y_edges": [20.0, 42.0, 65.0, 88.0, 112.0, 136.0, 161.0],
+              },
+              "SPN-concavo": {
+                  "zone": "SPN", "side": "concavo", "height": 251,
+                  "rows": ["A", "B", "C", "D", "E", "F"], "columns": 51,
+                  "x_anchors": {
+                      0: 31.0, 4: 186.0, 5: 225.0, 6: 264.0,
+                      11: 458.0, 12: 497.0, 17: 691.0, 18: 730.0,
+                      19: 769.0, 23: 924.0, 24: 963.0, 33: 1309.0,
+                      34: 1348.0, 40: 1581.0, 41: 1620.0,
+                      46: 1814.0, 47: 1853.0, 51: 2009.0,
+                  },
+                  "y_edges": [23.0, 58.0, 93.0, 129.0, 165.0, 201.0, 238.0],
+              },
+          }
+
+          SPN_CONVEXO = {
+              "zone": "SPN", "side": "convexo", "height": 219,
+              "rows": ["AX", "BX", "CX", "DX", "EX", "FX"],
+              # 25 columnas normales + 9 columnas JP + 26 columnas normales.
+              "visual_columns": 60,
+              "x_anchors": {
+                  0: 22.0, 2: 89.0, 3: 123.0, 5: 190.0, 6: 223.5,
+                  8: 291.0, 9: 324.0, 11: 391.5, 12: 425.0,
+                  14: 492.0, 15: 525.5, 17: 593.0, 18: 626.0,
+                  20: 694.0, 21: 727.0, 23: 794.0, 24: 828.0,
+                  25: 861.0, 34: 1161.0, 35: 1194.0, 37: 1261.0,
+                  38: 1295.0, 40: 1362.0, 41: 1395.0, 43: 1463.0,
+                  44: 1496.0, 46: 1563.5, 47: 1597.0, 49: 1664.0,
+                  52: 1765.0, 53: 1798.0, 55: 1865.5, 56: 1899.0,
+                  58: 1966.0, 59: 2000.0, 60: 2034.0,
+              },
+              "y_edges": [20.0, 50.0, 80.0, 112.0, 143.0, 174.0, 206.0],
+          }'''
+
+          config_start = build.index('STANDARD_GRIDS = {')
+          config_end = build.index('\n\ndef load_source_asset', config_start)
+          build = build[:config_start] + config + build[config_end:]
+
+          generators = '''def interpolate_axis_edges(count: int, anchors: dict[int, float]) -> list[float]:
+              """Interpolate cell limits between measured separators in the source image."""
+              anchor_indexes = sorted(anchors)
+              if not anchor_indexes or anchor_indexes[0] != 0 or anchor_indexes[-1] != count:
+                  raise RuntimeError(f"Los anclajes deben cubrir 0..{count}: {anchor_indexes}")
+
+              edges: list[float | None] = [None] * (count + 1)
+              for start, end in zip(anchor_indexes, anchor_indexes[1:]):
+                  left = float(anchors[start])
+                  right = float(anchors[end])
+                  span = end - start
+                  if span <= 0 or right <= left:
+                      raise RuntimeError(f"Anclajes invalidos: {start}={left}, {end}={right}")
+                  for index in range(start, end + 1):
+                      ratio = (index - start) / span
+                      edges[index] = round(left + (right - left) * ratio, 6)
+
+              if any(value is None for value in edges):
+                  raise RuntimeError("No fue posible interpolar todos los limites de la cuadricula")
+              return [float(value) for value in edges]
+
+
+          def calibrated_edges(spec: dict) -> tuple[list[float], list[float]]:
+              column_count = int(spec.get("columns", spec.get("visual_columns", 0)))
+              x_edges = interpolate_axis_edges(column_count, spec["x_anchors"])
+              y_edges = [float(value) for value in spec["y_edges"]]
+              if len(y_edges) != len(spec["rows"]) + 1:
+                  raise RuntimeError(f"Cantidad de limites Y invalida para {spec['zone']} {spec['side']}")
+              if any(right <= left for left, right in zip(x_edges, x_edges[1:])):
+                  raise RuntimeError("Los limites X deben ser estrictamente crecientes")
+              if any(bottom <= top for top, bottom in zip(y_edges, y_edges[1:])):
+                  raise RuntimeError("Los limites Y deben ser estrictamente crecientes")
+              return x_edges, y_edges
+
+
+          def generate_standard_grid(spec: dict):
+              row_count = len(spec["rows"])
+              col_count = spec["columns"]
+              x_edges, y_edges = calibrated_edges(spec)
+              features = []
+
+              for r, row in enumerate(spec["rows"]):
+                  top = y_edges[r]
+                  bottom = y_edges[r + 1]
+                  for c in range(col_count):
+                      left = x_edges[c]
+                      right = x_edges[c + 1]
+                      features.append(make_feature(
+                          spec["zone"], spec["side"], row, c + 1, r, c,
+                          spec["height"], left, right, top, bottom,
+                      ))
+
+              return {"type": "FeatureCollection", "features": features}
+
+
+          def generate_spn_convexo():
+              spec = SPN_CONVEXO
+              x_edges, y_edges = calibrated_edges(spec)
+              features = []
+
+              for r, row in enumerate(spec["rows"]):
+                  top = y_edges[r]
+                  bottom = y_edges[r + 1]
+
+                  # Izquierda: 1AX..25FX.
+                  for number in range(1, 26):
+                      c = number - 1
+                      features.append(make_feature(
+                          spec["zone"], spec["side"], row, number, r, c,
+                          spec["height"], x_edges[c], x_edges[c + 1], top, bottom,
+                      ))
+
+                  # Centro: 54 nichos JP, 9 por fila (1JP..54JP).
+                  for j in range(9):
+                      c = 25 + j
+                      number = r * 9 + j + 1
+                      features.append(make_feature(
+                          spec["zone"], spec["side"], "JP", number, r, c,
+                          spec["height"], x_edges[c], x_edges[c + 1], top, bottom,
+                      ))
+
+                  # Derecha: 26AX..51FX.
+                  for number in range(26, 52):
+                      c = 34 + (number - 26)
+                      features.append(make_feature(
+                          spec["zone"], spec["side"], row, number, r, c,
+                          spec["height"], x_edges[c], x_edges[c + 1], top, bottom,
+                      ))
+
+              return {"type": "FeatureCollection", "features": features}'''
+
+          generators_start = build.index('def generate_standard_grid(spec: dict):')
+          generators_end = build.index('\n\ndef write_geojson', generators_start)
+          build = build[:generators_start] + generators + build[generators_end:]
+          build = build.replace('nichos-v2-preview.css?v=9', 'nichos-v2-preview.css?v=10')
+          build = build.replace('nichos-v2-preview.js?v=9', 'nichos-v2-preview.js?v=10')
+          build = build.replace('nichos-v2-map-integration.js?v=9', 'nichos-v2-map-integration.js?v=10')
+          build_path.write_text(build, encoding='utf-8')
+
+          preview_path = root / 'nichos-v2-preview.js'
+          preview = preview_path.read_text(encoding='utf-8')
+          old_todos = "    if (state.activeFilter === 'todos') return collection;"
+          new_todos = """    if (state.activeFilter === 'todos') {
+              return { ...collection, features: [] };
+            }"""
+          if preview.count(old_todos) != 1:
+              raise RuntimeError('No se encontro una unica condicion del filtro Todos')
+          preview = preview.replace(old_todos, new_todos, 1)
+
+          old_renderer = '        preferCanvas: true,'
+          new_renderer = '        preferCanvas: false,'
+          if preview.count(old_renderer) != 1:
+              raise RuntimeError('No se encontro una unica configuracion preferCanvas')
+          preview = preview.replace(old_renderer, new_renderer, 1)
+          preview_path.write_text(preview, encoding='utf-8')
+          PY
+
+      - name: Validar sintaxis y construccion
+        shell: bash
+        run: |
+          python3 -m py_compile tools/build_nichos_v2_preview.py
+          node --check nichos-v2-preview.js
+          python3 tools/build_nichos_v2_preview.py
+          node --check deploy/nichos-v2-preview.js
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          expected = {
+              'PLN-concavo': (402, 15.0, 2034.0, 22.0, 48.0, 201.0),
+              'PLN-convexo': (474, 12.0, 2038.0, 20.0, 42.0, 176.0),
+              'SPN-concavo': (306, 31.0, 2009.0, 23.0, 58.0, 251.0),
+              'SPN-convexo': (360, 22.0, 2034.0, 20.0, 50.0, 219.0),
+          }
+
+          for name, (count, x0, x1, y0, first_bottom, height) in expected.items():
+              data = json.loads((Path('deploy/data') / f'{name}.geojson').read_text(encoding='utf-8'))
+              features = data['features']
+              assert len(features) == count, (name, len(features), count)
+              first = features[0]['geometry']['coordinates'][0]
+              last = features[-1]['geometry']['coordinates'][0]
+              assert first[0][0] == x0, (name, first[0][0], x0)
+              assert first[0][1] == height - y0, (name, first[0][1], height - y0)
+              assert first[2][1] == height - first_bottom, (name, first[2][1], height - first_bottom)
+              assert last[1][0] == x1, (name, last[1][0], x1)
+
+          source = Path('deploy/nichos-v2-preview.js').read_text(encoding='utf-8')
+          assert "features: []" in source
+          assert 'preferCanvas: false' in source
+          print('Calibracion y modo imagen limpia validados.')
+          PY
+          git diff --check
+
+      - name: Guardar cambios en la rama de preview
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/build_nichos_v2_preview.py nichos-v2-preview.js
+          git commit -m "Calibrar recuadros de Nichos V2 y modo imagen limpia [skip ci]"
+          git push origin HEAD:preview/nichos-v2-sabbathycal
