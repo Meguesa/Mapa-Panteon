@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Preparar PHP 8.2
         uses: shivammathur/setup-php@v2
@@ -38,16 +38,18 @@ jobs:
           rm -rf .tmp-msal
           npm install --prefix .tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
 
-      - name: Construir preview aislado
+      - name: Construir preview aislado v11
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m py_compile tools/build_nichos_v2_preview.py tools/apply_nichos_v2_v11.py
           python3 tools/build_nichos_v2_preview.py
+          python3 tools/apply_nichos_v2_v11.py
           mkdir -p deploy/vendor
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
           rm -rf .tmp-msal
 
-      - name: Validar preview
+      - name: Validar preview v11
         shell: bash
         run: |
           set -euo pipefail
@@ -58,34 +60,41 @@ jobs:
           test -s deploy/nichos-v2-preview.js
           test -s deploy/nichos-v2-preview.css
           test -s deploy/nichos-v2-map-integration.js
-          test -s deploy/assets/PLN-concavo.png
-          test -s deploy/assets/PLN-convexo.png
-          test -s deploy/assets/SPN-concavo.png
-          test -s deploy/assets/SPN-convexo.png
+          test -s deploy/assets/PLN-concavo.webp
+          test -s deploy/assets/PLN-convexo.webp
+          test -s deploy/assets/SPN-concavo.webp
+          test -s deploy/assets/SPN-convexo.webp
           test -s deploy/vendor/msal-browser.min.js
           test -s deploy/data/PLN-concavo.geojson
           test -s deploy/data/PLN-convexo.geojson
           test -s deploy/data/SPN-concavo.geojson
           test -s deploy/data/SPN-convexo.geojson
           test -s deploy/data/nichos-zonas.geojson
+
           php -l deploy/index.php
-          grep -q 'nichos-v2-preview.css' deploy/index.php
-          grep -q 'nichos-v2-preview.js' deploy/index.php
+          node --check deploy/nichos-v2-preview.js
+          grep -q 'nichos-v2-preview.css?v=11' deploy/index.php
+          grep -q 'nichos-v2-preview.js?v=11' deploy/index.php
+          grep -q 'nichos-v2-map-integration.js?v=11' deploy/index.php
           grep -q 'dirname(__DIR__, 2)' deploy/index.php
-          grep -q 'SPN-convexo' deploy/nichos-v2-preview.js
+          grep -q 'SPN-convexo.webp?v=11' deploy/nichos-v2-preview.js
+          grep -q 'state.nichesVisible = !state.nichesVisible' deploy/nichos-v2-preview.js
+          grep -q 'function renderVectorLabels' deploy/nichos-v2-preview.js
+          grep -q 'nv2LabelsPane' deploy/nichos-v2-preview.js
           grep -q "block !== 'JP'" deploy/nichos-v2-preview.js
-          grep -q 'SPN-convexo.png' deploy/nichos-v2-preview.js
           grep -q 'JP_ALLOW_INTERACTIVE_INVENTORY_AUTH' deploy/nichos-v2-preview.js
 
           python3 - <<'PY'
           import json
           from pathlib import Path
+
           expected = {
               'PLN-concavo.geojson': 402,
               'PLN-convexo.geojson': 474,
               'SPN-concavo.geojson': 306,
               'SPN-convexo.geojson': 360,
           }
+
           for name, expected_count in expected.items():
               path = Path('deploy/data') / name
               with path.open('r', encoding='utf-8') as fh:
@@ -112,8 +121,8 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           set -euo pipefail
-          REMOTE_DIR="preview-nichos-v2"
-          FTP_URL="ftp://whm95.mxwebserver.com:21"
+          REMOTE_DIR='preview-nichos-v2'
+          FTP_URL='ftp://whm95.mxwebserver.com:21'
 
           run_lftp() {
             local label="$1"
@@ -153,7 +162,7 @@ jobs:
             return 1
           }
 
-          run_lftp "preparar carpetas remotas" "
+          run_lftp 'preparar carpetas remotas' "
             set cmd:fail-exit no;
             mkdir -p '${REMOTE_DIR}';
             set cmd:fail-exit yes;
@@ -165,7 +174,7 @@ jobs:
             set cmd:fail-exit yes;
           " 300
 
-          run_lftp "publicar archivos base" "
+          run_lftp 'publicar archivos base' "
             cd '${REMOTE_DIR}';
             put 'deploy/index.php' -o 'index.php';
             put 'deploy/app.js' -o 'app.js';
@@ -177,7 +186,7 @@ jobs:
             put 'deploy/vendor/msal-browser.min.js' -o 'vendor/msal-browser.min.js';
           " 600
 
-          run_lftp "publicar datos geojson" "
+          run_lftp 'publicar datos geojson' "
             cd '${REMOTE_DIR}';
             put 'deploy/data/nichos-zonas.geojson' -o 'data/nichos-zonas.geojson';
             put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
@@ -198,9 +207,9 @@ jobs:
             " 1200
           }
 
-          publish_asset 'deploy/assets/PLN-concavo.png' 'assets/PLN-concavo.png' 'PLN-concavo.png'
-          publish_asset 'deploy/assets/PLN-convexo.png' 'assets/PLN-convexo.png' 'PLN-convexo.png'
-          publish_asset 'deploy/assets/SPN-concavo.png' 'assets/SPN-concavo.png' 'SPN-concavo.png'
-          publish_asset 'deploy/assets/SPN-convexo.png' 'assets/SPN-convexo.png' 'SPN-convexo.png'
+          publish_asset 'deploy/assets/PLN-concavo.webp' 'assets/PLN-concavo.webp' 'PLN-concavo.webp'
+          publish_asset 'deploy/assets/PLN-convexo.webp' 'assets/PLN-convexo.webp' 'PLN-convexo.webp'
+          publish_asset 'deploy/assets/SPN-concavo.webp' 'assets/SPN-concavo.webp' 'SPN-concavo.webp'
+          publish_asset 'deploy/assets/SPN-convexo.webp' 'assets/SPN-convexo.webp' 'SPN-convexo.webp'
 
           echo "Preview Nichos V2 actualizado correctamente en /mapa/${REMOTE_DIR}/"
