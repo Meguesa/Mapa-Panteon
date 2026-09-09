@@ -26,27 +26,15 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('nichos-v2-preview.js')
           source = path.read_text(encoding='utf-8')
-          old = """    if (state.activeFilter === 'todos') {
-            return { ...collection, features: [] };
-          }"""
-          # La primera aplicación quedó funcional, pero con dos líneas menos indentadas.
-          alternate = """    if (state.activeFilter === 'todos') {
-          return { ...collection, features: [] };
-        }"""
-          desired = """    if (state.activeFilter === 'todos') {
-              return { ...collection, features: [] };
-            }"""
-
-          if old in source:
-              source = source.replace(old, desired, 1)
-          elif alternate in source:
-              source = source.replace(alternate, desired, 1)
-          elif desired not in source:
-              raise RuntimeError('No se encontró el bloque esperado del filtro Todos')
-
+          pattern = r"    if \(state\.activeFilter === 'todos'\) \{\n\s*return \{ \.\.\.collection, features: \[\] \};\n\s*\}"
+          replacement = "    if (state.activeFilter === 'todos') {\n      return { ...collection, features: [] };\n    }"
+          source, count = re.subn(pattern, replacement, source, count=1)
+          if count != 1:
+              raise RuntimeError(f'Bloques Todos reemplazados: {count}; se esperaba 1')
           path.write_text(source, encoding='utf-8')
           PY
 
