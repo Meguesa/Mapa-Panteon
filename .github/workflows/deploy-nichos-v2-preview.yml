@@ -14,7 +14,7 @@ jobs:
   deploy-preview:
     name: Construir y publicar preview de Nichos V2
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     steps:
       - name: Descargar repositorio
@@ -62,6 +62,7 @@ jobs:
           test -s deploy/assets/PLN-convexo.png
           test -s deploy/assets/SPN-concavo.png
           test -s deploy/assets/SPN-convexo.webp
+          test -s deploy/vendor/msal-browser.min.js
           test -s deploy/data/PLN-concavo.geojson
           test -s deploy/data/PLN-convexo.geojson
           test -s deploy/data/SPN-concavo.geojson
@@ -105,50 +106,97 @@ jobs:
 
       - name: Publicar actualizacion incremental en cPanel
         shell: bash
+        timeout-minutes: 45
         env:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           set -euo pipefail
           REMOTE_DIR="preview-nichos-v2"
-          for attempt in 1 2 3; do
-            echo "[preview nichos V2] actualizacion incremental, intento ${attempt} de 3"
-            if timeout --kill-after=15s 240s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
-              set cmd:fail-exit yes;
-              set ftp:passive-mode true;
-              set ftp:ssl-force true;
-              set ftp:ssl-protect-data true;
-              set ftp:ssl-auth TLS;
-              set ftp:sync-mode true;
-              set ssl:verify-certificate yes;
-              set ssl:check-hostname yes;
-              set net:timeout 30;
-              set net:max-retries 2;
-              cd '$REMOTE_DIR';
-              put 'deploy/index.php' -o 'index.php';
-              put 'deploy/app.js' -o 'app.js';
-              put 'deploy/sharepoint-inventario.js' -o 'sharepoint-inventario.js';
-              put 'deploy/nichos-v2-preview.js' -o 'nichos-v2-preview.js';
-              put 'deploy/nichos-v2-preview.css' -o 'nichos-v2-preview.css';
-              put 'deploy/nichos-v2-map-integration.js' -o 'nichos-v2-map-integration.js';
-              put 'deploy/data/nichos-zonas.geojson' -o 'data/nichos-zonas.geojson';
-              put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
-              put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
-              put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
-              put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
-              put 'deploy/assets/PLN-concavo.png' -o 'assets/PLN-concavo.png';
-              put 'deploy/assets/PLN-convexo.png' -o 'assets/PLN-convexo.png';
-              put 'deploy/assets/SPN-concavo.png' -o 'assets/SPN-concavo.png';
-              put 'deploy/assets/SPN-convexo.webp' -o 'assets/SPN-convexo.webp';
-              bye;
-            "; then
-              echo "Preview Nichos V2 actualizado correctamente en /mapa/$REMOTE_DIR/"
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then
-              echo "Transferencia incremental fallida. Reintento en 15 segundos..."
-              sleep 15
-            fi
-          done
-          echo "ERROR: no fue posible publicar la actualizacion incremental despues de 3 intentos."
-          exit 1
+          FTP_URL="ftp://whm95.mxwebserver.com:21"
+
+          run_lftp() {
+            local label="$1"
+            local commands="$2"
+            local timeout_seconds="${3:-900}"
+
+            for attempt in 1 2 3; do
+              echo "[preview nichos V2] ${label}, intento ${attempt} de 3"
+              if timeout --kill-after=30s "${timeout_seconds}s" lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_URL" -e "
+                set cmd:fail-exit yes;
+                set ftp:passive-mode true;
+                set ftp:ssl-force true;
+                set ftp:ssl-protect-data true;
+                set ftp:ssl-auth TLS;
+                set ftp:sync-mode true;
+                set ssl:verify-certificate yes;
+                set ssl:check-hostname yes;
+                set net:timeout 60;
+                set net:max-retries 3;
+                set net:reconnect-interval-base 10;
+                set net:reconnect-interval-max 30;
+                set xfer:clobber yes;
+                ${commands}
+                bye;
+              "; then
+                echo "[preview nichos V2] ${label} completado"
+                return 0
+              fi
+
+              if [ "$attempt" -lt 3 ]; then
+                echo "[preview nichos V2] ${label} fallo. Reintento en 20 segundos..."
+                sleep 20
+              fi
+            done
+
+            echo "ERROR: no fue posible completar: ${label}"
+            return 1
+          }
+
+          run_lftp "preparar carpetas remotas" "
+            mkdir -p '${REMOTE_DIR}';
+            cd '${REMOTE_DIR}';
+            mkdir -p data;
+            mkdir -p assets;
+            mkdir -p vendor;
+          " 300
+
+          run_lftp "publicar archivos base" "
+            cd '${REMOTE_DIR}';
+            put 'deploy/index.php' -o 'index.php';
+            put 'deploy/app.js' -o 'app.js';
+            put 'deploy/styles.css' -o 'styles.css';
+            put 'deploy/sharepoint-inventario.js' -o 'sharepoint-inventario.js';
+            put 'deploy/nichos-v2-preview.js' -o 'nichos-v2-preview.js';
+            put 'deploy/nichos-v2-preview.css' -o 'nichos-v2-preview.css';
+            put 'deploy/nichos-v2-map-integration.js' -o 'nichos-v2-map-integration.js';
+            put 'deploy/vendor/msal-browser.min.js' -o 'vendor/msal-browser.min.js';
+          " 600
+
+          run_lftp "publicar datos geojson" "
+            cd '${REMOTE_DIR}';
+            put 'deploy/data/nichos-zonas.geojson' -o 'data/nichos-zonas.geojson';
+            put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
+            put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
+            put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
+            put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
+          " 900
+
+          publish_asset() {
+            local local_path="$1"
+            local remote_path="$2"
+            local label="$3"
+            run_lftp "publicar asset ${label}" "
+              cd '${REMOTE_DIR}';
+              put -c '${local_path}' -o '${remote_path}.tmp';
+              rm -f '${remote_path}';
+              mv '${remote_path}.tmp' '${remote_path}';
+            " 1200
+          }
+
+          publish_asset 'deploy/assets/PLN-concavo.png' 'assets/PLN-concavo.png' 'PLN-concavo.png'
+          publish_asset 'deploy/assets/PLN-convexo.png' 'assets/PLN-convexo.png' 'PLN-convexo.png'
+          publish_asset 'deploy/assets/SPN-concavo.png' 'assets/SPN-concavo.png' 'SPN-concavo.png'
+          publish_asset 'deploy/assets/SPN-convexo.webp' 'assets/SPN-convexo.webp' 'SPN-convexo.webp'
+
+          echo "Preview Nichos V2 actualizado correctamente en /mapa/${REMOTE_DIR}/"
