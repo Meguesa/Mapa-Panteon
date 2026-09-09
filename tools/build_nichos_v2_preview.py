@@ -19,29 +19,63 @@ ASSETS = [
 STANDARD_GRIDS = {
     "PLN-concavo": {
         "zone": "PLN", "side": "concavo", "height": 201,
-        "x0": 14.0, "x1": 2034.0, "y0": 22.0, "y1": 192.0,
         "rows": ["A", "B", "C", "D", "E", "F"], "columns": 67,
+        # Limites medidos sobre los separadores reales de la fotografia.
+        "x_anchors": {
+            0: 15.0, 2: 75.0, 4: 135.5, 6: 196.0, 8: 256.0,
+            10: 316.5, 12: 377.0, 14: 437.0, 16: 497.5, 18: 558.0,
+            20: 618.0, 47: 1431.0, 49: 1491.0, 51: 1551.0,
+            53: 1612.0, 55: 1672.0, 57: 1732.0, 59: 1793.0,
+            61: 1853.0, 63: 1913.5, 65: 1974.0, 67: 2034.0,
+        },
+        "y_edges": [22.0, 48.0, 76.0, 104.0, 132.0, 160.0, 188.0],
     },
     "PLN-convexo": {
         "zone": "PLN", "side": "convexo", "height": 176,
-        "x0": 12.0, "x1": 2034.0, "y0": 20.0, "y1": 164.0,
         "rows": ["AX", "BX", "CX", "DX", "EX", "FX"], "columns": 79,
+        "x_anchors": {
+            0: 12.0, 2: 63.0, 3: 89.0, 4: 115.0, 5: 141.0,
+            9: 243.0, 10: 269.0, 11: 295.0, 15: 397.0,
+            16: 423.0, 17: 449.0, 22: 577.0, 23: 603.0,
+            24: 629.0, 53: 1371.0, 54: 1396.0, 55: 1422.0,
+            60: 1550.5, 61: 1576.0, 62: 1602.0, 66: 1704.5,
+            67: 1730.0, 68: 1756.0, 72: 1858.5, 73: 1884.0,
+            74: 1910.0, 75: 1936.0, 78: 2013.0, 79: 2038.0,
+        },
+        "y_edges": [20.0, 42.0, 65.0, 88.0, 112.0, 136.0, 161.0],
     },
     "SPN-concavo": {
         "zone": "SPN", "side": "concavo", "height": 251,
-        "x0": 31.0, "x1": 2009.0, "y0": 23.0, "y1": 237.0,
         "rows": ["A", "B", "C", "D", "E", "F"], "columns": 51,
+        "x_anchors": {
+            0: 31.0, 4: 186.0, 5: 225.0, 6: 264.0,
+            11: 458.0, 12: 497.0, 17: 691.0, 18: 730.0,
+            19: 769.0, 23: 924.0, 24: 963.0, 33: 1309.0,
+            34: 1348.0, 40: 1581.0, 41: 1620.0,
+            46: 1814.0, 47: 1853.0, 51: 2009.0,
+        },
+        "y_edges": [23.0, 58.0, 93.0, 129.0, 165.0, 201.0, 238.0],
     },
 }
 
 SPN_CONVEXO = {
     "zone": "SPN", "side": "convexo", "height": 219,
-    "x0": 22.0, "x1": 2034.0, "y0": 20.0, "y1": 207.0,
     "rows": ["AX", "BX", "CX", "DX", "EX", "FX"],
     # 25 columnas normales + 9 columnas JP + 26 columnas normales.
     "visual_columns": 60,
+    "x_anchors": {
+        0: 22.0, 2: 89.0, 3: 123.0, 5: 190.0, 6: 223.5,
+        8: 291.0, 9: 324.0, 11: 391.5, 12: 425.0,
+        14: 492.0, 15: 525.5, 17: 593.0, 18: 626.0,
+        20: 694.0, 21: 727.0, 23: 794.0, 24: 828.0,
+        25: 861.0, 34: 1161.0, 35: 1194.0, 37: 1261.0,
+        38: 1295.0, 40: 1362.0, 41: 1395.0, 43: 1463.0,
+        44: 1496.0, 46: 1563.5, 47: 1597.0, 49: 1664.0,
+        52: 1765.0, 53: 1798.0, 55: 1865.5, 56: 1899.0,
+        58: 1966.0, 59: 2000.0, 60: 2034.0,
+    },
+    "y_edges": [20.0, 50.0, 80.0, 112.0, 143.0, 174.0, 206.0],
 }
-
 
 def load_source_asset(name: str) -> bytes:
     direct = SOURCE / name
@@ -109,19 +143,53 @@ def make_feature(zone: str, side: str, row: str, number: int, grid_row: int, gri
     }
 
 
+def interpolate_axis_edges(count: int, anchors: dict[int, float]) -> list[float]:
+    """Interpolate cell limits between measured separators in the source image."""
+    anchor_indexes = sorted(anchors)
+    if not anchor_indexes or anchor_indexes[0] != 0 or anchor_indexes[-1] != count:
+        raise RuntimeError(f"Los anclajes deben cubrir 0..{count}: {anchor_indexes}")
+
+    edges: list[float | None] = [None] * (count + 1)
+    for start, end in zip(anchor_indexes, anchor_indexes[1:]):
+        left = float(anchors[start])
+        right = float(anchors[end])
+        span = end - start
+        if span <= 0 or right <= left:
+            raise RuntimeError(f"Anclajes invalidos: {start}={left}, {end}={right}")
+        for index in range(start, end + 1):
+            ratio = (index - start) / span
+            edges[index] = round(left + (right - left) * ratio, 6)
+
+    if any(value is None for value in edges):
+        raise RuntimeError("No fue posible interpolar todos los limites de la cuadricula")
+    return [float(value) for value in edges]
+
+
+def calibrated_edges(spec: dict) -> tuple[list[float], list[float]]:
+    column_count = int(spec.get("columns", spec.get("visual_columns", 0)))
+    x_edges = interpolate_axis_edges(column_count, spec["x_anchors"])
+    y_edges = [float(value) for value in spec["y_edges"]]
+    if len(y_edges) != len(spec["rows"]) + 1:
+        raise RuntimeError(f"Cantidad de limites Y invalida para {spec['zone']} {spec['side']}")
+    if any(right <= left for left, right in zip(x_edges, x_edges[1:])):
+        raise RuntimeError("Los limites X deben ser estrictamente crecientes")
+    if any(bottom <= top for top, bottom in zip(y_edges, y_edges[1:])):
+        raise RuntimeError("Los limites Y deben ser estrictamente crecientes")
+    return x_edges, y_edges
+
+
 def generate_standard_grid(spec: dict):
     row_count = len(spec["rows"])
     col_count = spec["columns"]
-    cell_w = (spec["x1"] - spec["x0"]) / col_count
-    cell_h = (spec["y1"] - spec["y0"]) / row_count
+    x_edges, y_edges = calibrated_edges(spec)
     features = []
 
     for r, row in enumerate(spec["rows"]):
-        top = spec["y0"] + r * cell_h
-        bottom = spec["y0"] + (r + 1) * cell_h
+        top = y_edges[r]
+        bottom = y_edges[r + 1]
         for c in range(col_count):
-            left = spec["x0"] + c * cell_w
-            right = spec["x0"] + (c + 1) * cell_w
+            left = x_edges[c]
+            right = x_edges[c + 1]
             features.append(make_feature(
                 spec["zone"], spec["side"], row, c + 1, r, c,
                 spec["height"], left, right, top, bottom,
@@ -132,47 +200,39 @@ def generate_standard_grid(spec: dict):
 
 def generate_spn_convexo():
     spec = SPN_CONVEXO
-    cell_w = (spec["x1"] - spec["x0"]) / spec["visual_columns"]
-    cell_h = (spec["y1"] - spec["y0"]) / len(spec["rows"])
+    x_edges, y_edges = calibrated_edges(spec)
     features = []
 
     for r, row in enumerate(spec["rows"]):
-        top = spec["y0"] + r * cell_h
-        bottom = spec["y0"] + (r + 1) * cell_h
+        top = y_edges[r]
+        bottom = y_edges[r + 1]
 
         # Izquierda: 1AX..25FX.
         for number in range(1, 26):
             c = number - 1
-            left = spec["x0"] + c * cell_w
-            right = spec["x0"] + (c + 1) * cell_w
             features.append(make_feature(
                 spec["zone"], spec["side"], row, number, r, c,
-                spec["height"], left, right, top, bottom,
+                spec["height"], x_edges[c], x_edges[c + 1], top, bottom,
             ))
 
         # Centro: 54 nichos JP, 9 por fila (1JP..54JP).
         for j in range(9):
             c = 25 + j
             number = r * 9 + j + 1
-            left = spec["x0"] + c * cell_w
-            right = spec["x0"] + (c + 1) * cell_w
             features.append(make_feature(
                 spec["zone"], spec["side"], "JP", number, r, c,
-                spec["height"], left, right, top, bottom,
+                spec["height"], x_edges[c], x_edges[c + 1], top, bottom,
             ))
 
         # Derecha: 26AX..51FX.
         for number in range(26, 52):
             c = 34 + (number - 26)
-            left = spec["x0"] + c * cell_w
-            right = spec["x0"] + (c + 1) * cell_w
             features.append(make_feature(
                 spec["zone"], spec["side"], row, number, r, c,
-                spec["height"], left, right, top, bottom,
+                spec["height"], x_edges[c], x_edges[c + 1], top, bottom,
             ))
 
     return {"type": "FeatureCollection", "features": features}
-
 
 def write_geojson(name: str, data: dict) -> None:
     destination = DEPLOY / "data" / f"{name}.geojson"
@@ -350,8 +410,8 @@ def patch_preview_runtime():
 def inject_preview_assets():
     index_path = DEPLOY / "index.php"
     source = index_path.read_text(encoding="utf-8")
-    source = source.replace('<link rel="stylesheet" href="./portal-integration.css?v=5" />', '<link rel="stylesheet" href="./portal-integration.css?v=5" />\n  <link rel="stylesheet" href="./nichos-v2-preview.css?v=9" />', 1)
-    source = source.replace("</body>", '  <script src="./nichos-v2-preview.js?v=9"></script>\n  <script src="./nichos-v2-map-integration.js?v=9"></script>\n</body>', 1)
+    source = source.replace('<link rel="stylesheet" href="./portal-integration.css?v=5" />', '<link rel="stylesheet" href="./portal-integration.css?v=5" />\n  <link rel="stylesheet" href="./nichos-v2-preview.css?v=10" />', 1)
+    source = source.replace("</body>", '  <script src="./nichos-v2-preview.js?v=10"></script>\n  <script src="./nichos-v2-map-integration.js?v=10"></script>\n</body>', 1)
     source = source.replace("require_once dirname(__DIR__) . '/includes/bootstrap.php';", "require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';", 1)
     index_path.write_text(source, encoding="utf-8")
 

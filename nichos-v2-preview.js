@@ -569,7 +569,9 @@
   function filteredCollection() {
     const collection = state.featureCollection;
     if (!collection?.features) return { type: 'FeatureCollection', features: [] };
-    if (state.activeFilter === 'todos') return collection;
+    if (state.activeFilter === 'todos') {
+    return { ...collection, features: [] };
+  }
 
     return {
       ...collection,
@@ -763,7 +765,7 @@
         maxZoom: 3,
         zoomSnap: 0.25,
         attributionControl: false,
-        preferCanvas: true,
+        preferCanvas: false,
       });
     }
 
