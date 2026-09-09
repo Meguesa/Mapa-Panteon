@@ -45,7 +45,6 @@
   function isInventoryRequest(input) {
     const rawUrl = typeof input === "string" ? input : input && input.url;
     if (!rawUrl) return false;
-
     try {
       const url = new URL(rawUrl, window.location.href);
       return url.pathname.endsWith(INVENTORY_FILE_SUFFIX);
@@ -54,13 +53,25 @@
     }
   }
 
+  function interactiveAuthAllowed() {
+    return window.JP_ALLOW_INTERACTIVE_INVENTORY_AUTH === true;
+  }
+
+  function requiresInteraction(error) {
+    const code = String(error && (error.errorCode || error.error || error.name) || "").toLowerCase();
+    const message = String(error && (error.message || error.errorMessage) || "").toLowerCase();
+    return error instanceof window.msal.InteractionRequiredAuthError ||
+      ["interaction_required", "login_required", "consent_required", "monitor_window_timeout", "no_tokens_found", "token_refresh_required"].includes(code) ||
+      message.includes("monitor_window_timeout") ||
+      message.includes("x-frame-options") ||
+      message.includes("iframe");
+  }
+
   function getMsalApp() {
     if (msalApp) return msalApp;
-
     if (!window.msal || !window.msal.PublicClientApplication) {
       throw new Error("No se cargó la biblioteca MSAL Browser.");
     }
-
     msalApp = new window.msal.PublicClientApplication({
       auth: {
         clientId: CONFIG.clientId,
@@ -68,345 +79,172 @@
         redirectUri: CONFIG.redirectUri,
         navigateToLoginRequestUrl: true
       },
-      cache: {
-        cacheLocation: "sessionStorage",
-        storeAuthStateInCookie: false
-      },
+      cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false },
       system: {
         loggerOptions: {
           loggerCallback: function (_level, message, containsPii) {
-            if (!containsPii && message) {
-              console.debug("[MSAL]", message);
-            }
+            if (!containsPii && message) console.debug("[MSAL]", message);
           },
           piiLoggingEnabled: false
         }
       }
     });
-
     return msalApp;
   }
 
   function initializeAuthentication() {
     if (authReadyPromise) return authReadyPromise;
-
     const app = getMsalApp();
-
-    authReadyPromise = app.handleRedirectPromise()
-      .then(function (response) {
-        if (response && response.account) {
-          app.setActiveAccount(response.account);
-          return response.account;
-        }
-
-        const activeAccount = app.getActiveAccount();
-        if (activeAccount) return activeAccount;
-
-        const accounts = app.getAllAccounts();
-        if (accounts.length > 0) {
-          app.setActiveAccount(accounts[0]);
-          return accounts[0];
-        }
-
-        return null;
-      });
-
+    authReadyPromise = app.handleRedirectPromise().then(function (response) {
+      if (response && response.account) {
+        app.setActiveAccount(response.account);
+        return response.account;
+      }
+      const activeAccount = app.getActiveAccount();
+      if (activeAccount) return activeAccount;
+      const accounts = app.getAllAccounts();
+      if (accounts.length > 0) {
+        app.setActiveAccount(accounts[0]);
+        return accounts[0];
+      }
+      return null;
+    });
     return authReadyPromise;
   }
 
-  async function redirectAndWait(action) {
-    await action();
-    return new Promise(function () {});
+  async function acquireTokenWithPopup(account) {
+    const app = getMsalApp();
+    const request = { scopes: CONFIG.scopes, redirectUri: CONFIG.redirectUri };
+    const response = account
+      ? await app.acquireTokenPopup({ ...request, account })
+      : await app.loginPopup(request);
+    if (response && response.account) app.setActiveAccount(response.account);
+    return response.accessToken;
   }
 
   async function getAccessToken() {
     const app = getMsalApp();
-    let account = await initializeAuthentication();
+    const account = await initializeAuthentication();
 
     if (!account) {
-      return redirectAndWait(function () {
-        return app.loginRedirect({
-          scopes: CONFIG.scopes,
-          redirectUri: CONFIG.redirectUri
-        });
-      });
+      if (interactiveAuthAllowed()) return acquireTokenWithPopup(null);
+      throw new Error("AUTH_INTERACTION_REQUIRED");
     }
 
     try {
-      const response = await app.acquireTokenSilent({
-        scopes: CONFIG.scopes,
-        account: account
-      });
-
+      const response = await app.acquireTokenSilent({ scopes: CONFIG.scopes, account: account });
       return response.accessToken;
     } catch (error) {
-      const requiresInteraction =
-        error instanceof window.msal.InteractionRequiredAuthError ||
-        ["interaction_required", "login_required", "consent_required"].includes(error && error.errorCode);
-
-      if (!requiresInteraction) throw error;
-
-      return redirectAndWait(function () {
-        return app.acquireTokenRedirect({
-          scopes: CONFIG.scopes,
-          account: account,
-          redirectUri: CONFIG.redirectUri
-        });
-      });
+      if (!requiresInteraction(error)) throw error;
+      if (interactiveAuthAllowed()) return acquireTokenWithPopup(account);
+      throw error;
     }
   }
 
   function wait(milliseconds) {
-    return new Promise(function (resolve) {
-      window.setTimeout(resolve, milliseconds);
-    });
+    return new Promise(function (resolve) { window.setTimeout(resolve, milliseconds); });
   }
 
   async function graphGet(url, accessToken, attempt) {
     const currentAttempt = attempt || 0;
     const response = await originalFetch(url, {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json"
-      },
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
       cache: "no-store"
     });
-
     if ((response.status === 429 || response.status >= 500) && currentAttempt < 3) {
       const retryAfter = Number(response.headers.get("Retry-After"));
-      const delay = Number.isFinite(retryAfter) && retryAfter > 0
-        ? retryAfter * 1000
-        : Math.pow(2, currentAttempt) * 1000;
-
+      const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : Math.pow(2, currentAttempt) * 1000;
       await wait(delay);
       return graphGet(url, accessToken, currentAttempt + 1);
     }
-
     if (!response.ok) {
       const body = await response.text();
       throw new Error(`Microsoft Graph respondió ${response.status}: ${body.slice(0, 500)}`);
     }
-
     return response.json();
   }
 
-  function text(value) {
-    return value === null || value === undefined ? "" : String(value).trim();
-  }
-
-  function lower(value) {
-    return text(value).toLowerCase();
-  }
-
-  function number(value) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  function isFalse(value) {
-    if (value === false || value === 0) return true;
-    return ["false", "no", "0"].includes(lower(value));
-  }
-
-  function normalizeType(fields) {
-    const value = lower(fields.Tipo_Propiedad || fields.Categoria);
-    return value.includes("nicho") ? "nicho" : "lote";
-  }
-
+  function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
+  function lower(value) { return text(value).toLowerCase(); }
+  function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+  function isFalse(value) { if (value === false || value === 0) return true; return ["false", "no", "0"].includes(lower(value)); }
+  function normalizeType(fields) { const value = lower(fields.Tipo_Propiedad || fields.Categoria); return value.includes("nicho") ? "nicho" : "lote"; }
   function normalizeStatus(value) {
     const status = lower(value);
-
     if (["disponible", "libre"].includes(status)) return "disponible";
     if (["separado", "separada", "apartado", "apartada"].includes(status)) return "separado";
     if (["suspendido", "suspendida"].includes(status)) return "suspendido";
     if (["vendido", "vendida"].includes(status)) return "vendido";
     if (["utilizado", "utilizada", "ocupado", "ocupada", "usado", "usada", "parcialmente utilizado", "parcialmente utilizada"].includes(status)) return "utilizado";
     if (["por construir", "por_construir", "no construida", "no construido"].includes(status)) return "por_construir";
-
     return status;
   }
-
   function resolveStatus(fields) {
     if (isFalse(fields.Esta_Construida)) return "por_construir";
-
     const hasUsage = number(fields.Uso_Inhumacion) > 0 || number(fields.Usos_Cenizas) > 0;
     if (hasUsage) return "utilizado";
-
     const usageStatus = normalizeStatus(fields.Estatus_Uso);
     if (usageStatus === "utilizado") return usageStatus;
-
     const occupancyStatus = normalizeStatus(fields.Estatus_Ocupacion);
     if (occupancyStatus === "utilizado") return occupancyStatus;
-
     const saleStatus = normalizeStatus(fields.Estatus_Venta);
     if (saleStatus) return saleStatus;
-
     const capacityStatus = normalizeStatus(fields.Estatus_Capacidad);
     if (capacityStatus) return capacityStatus;
-
     return occupancyStatus || usageStatus || "desconocido";
   }
-
   function buildNichoCodigo(fields) {
     const seccion = text(fields.ZonaId || fields.Seccion).toUpperCase();
     const manzanaRaw = text(fields.Manzana).toUpperCase();
     const codigoRaw = text(fields.Codigo);
-  
-    if (!seccion || !codigoRaw || !manzanaRaw) {
-      return text(fields.Clave_Busqueda_Principal || fields.Title);
-    }
-  
-    const codigoNumerico = /^\d+$/.test(codigoRaw)
-      ? String(Number(codigoRaw)).padStart(2, "0")
-      : codigoRaw.toUpperCase();
-  
+    if (!seccion || !codigoRaw || !manzanaRaw) return text(fields.Clave_Busqueda_Principal || fields.Title);
+    const codigoNumerico = /^\d+$/.test(codigoRaw) ? String(Number(codigoRaw)).padStart(3, "0") : codigoRaw.toUpperCase();
     let manzanaMapa = manzanaRaw;
     const manzanaMatch = manzanaRaw.match(/^([A-Z]+)0*(\d+)$/);
-  
-    if (
-      manzanaMatch &&
-      /^\d+$/.test(codigoRaw) &&
-      Number(manzanaMatch[2]) === Number(codigoRaw)
-    ) {
-      manzanaMapa = manzanaMatch[1];
-    }
-  
+    if (manzanaMatch && /^\d+$/.test(codigoRaw) && Number(manzanaMatch[2]) === Number(codigoRaw)) manzanaMapa = manzanaMatch[1];
     return `${seccion}-${codigoNumerico}-${manzanaMapa}`;
   }
-  
   function mapItem(graphItem) {
     const fields = graphItem && graphItem.fields ? graphItem.fields : {};
     const type = normalizeType(fields);
-
-    const zonaId = type === "nicho"
-      ? text(fields.ZonaId || fields.Seccion)
-      : text(fields.ZonaId);
-    
-    const codigo = type === "nicho"
-      ? buildNichoCodigo(fields)
-      : text(fields.Codigo || fields.Clave_Busqueda_Principal || fields.Title);
-    
+    const zonaId = type === "nicho" ? text(fields.ZonaId || fields.Seccion) : text(fields.ZonaId);
+    const codigo = type === "nicho" ? buildNichoCodigo(fields) : text(fields.Codigo || fields.Clave_Busqueda_Principal || fields.Title);
     return {
-      tipo: type,
-      seccion: text(fields.Seccion),
-      manzana: text(fields.Manzana),
-      zonaId: zonaId,
-      cara: text(fields.Cara),
-      codigo: codigo,
-
-      // Preservamos los campos originales de SharePoint para que el preview
-      // V2 pueda cruzar nichos usando la misma lógica del repositorio fuente:
-      // zona + cara + manzana/bloque + Codigo original.
-      codigo_origen: text(fields.Codigo),
-      title_origen: text(fields.Title),
-
-      estatus: resolveStatus(fields),
-      referencia_procap: text(fields.Referencia_ProcaP),
-      observaciones: text(fields.Observaciones || fields.Observacion_Automatizacion),
-      clave_propiedad: text(fields.Clave_Propiedad),
-      clave_busqueda_principal: text(fields.Clave_Busqueda_Principal),
-      claves_busqueda_alternas: text(fields.Claves_Busqueda_Alternas),
-      esta_construido: !isFalse(fields.Esta_Construida),
-      estatus_venta: text(fields.Estatus_Venta),
-      estatus_uso: text(fields.Estatus_Uso),
-      estatus_ocupacion: text(fields.Estatus_Ocupacion),
-      estatus_capacidad: text(fields.Estatus_Capacidad),
-      finado: text(fields.Finado),
-      capacidad_inhumaciones: number(fields.Capacidad_Inhumaciones),
-      uso_inhumacion: number(fields.Uso_Inhumacion),
-      capacidad_cenizas: number(fields.Capacidad_Cenizas),
-      usos_cenizas: number(fields.Usos_Cenizas),
-      fecha_actualizacion: text(fields.Fecha_Actualizacion),
-      fuente_ultima_actualizacion: text(fields.Fuente_Ultima_Actualizacion)
+      tipo: type, seccion: text(fields.Seccion), manzana: text(fields.Manzana), zonaId: zonaId, cara: text(fields.Cara), codigo: codigo,
+      codigo_origen: text(fields.Codigo), title_origen: text(fields.Title), estatus: resolveStatus(fields), referencia_procap: text(fields.Referencia_ProcaP),
+      observaciones: text(fields.Observaciones || fields.Observacion_Automatizacion), clave_propiedad: text(fields.Clave_Propiedad),
+      clave_busqueda_principal: text(fields.Clave_Busqueda_Principal), claves_busqueda_alternas: text(fields.Claves_Busqueda_Alternas),
+      esta_construido: !isFalse(fields.Esta_Construida), estatus_venta: text(fields.Estatus_Venta), estatus_uso: text(fields.Estatus_Uso),
+      estatus_ocupacion: text(fields.Estatus_Ocupacion), estatus_capacidad: text(fields.Estatus_Capacidad), finado: text(fields.Finado),
+      capacidad_inhumaciones: number(fields.Capacidad_Inhumaciones), uso_inhumacion: number(fields.Uso_Inhumacion), capacidad_cenizas: number(fields.Capacidad_Cenizas),
+      usos_cenizas: number(fields.Usos_Cenizas), fecha_actualizacion: text(fields.Fecha_Actualizacion), fuente_ultima_actualizacion: text(fields.Fuente_Ultima_Actualizacion)
     };
   }
-
   async function loadInventoryFromSharePoint() {
     const accessToken = await getAccessToken();
-    const fields = [
-      "Title",
-      "Clave_Propiedad",
-      "Tipo_Propiedad",
-      "Seccion",
-      "Manzana",
-      "Esta_Construida",
-      "Estatus_Venta",
-      "Estatus_Uso",
-      "Referencia_ProcaP",
-      "Fecha_Venta",
-      "Fecha_Uso",
-      "Fuente_Ultima_Actualizacion",
-      "Fecha_Actualizacion",
-      "Categoria",
-      "Codigo",
-      "ZonaId",
-      "Cara",
-      "Estatus_Ocupacion",
-      "Finado",
-      "Observaciones",
-      "Ultima_Actualizacion_Venta",
-      "Ultima_Actualizacion_Ocupacion",
-      "Fuente_Actualizacion_Venta",
-      "Fuente_Actualizacion_Ocupacion",
-      "Observacion_Automatizacion",
-      "Capacidad_Inhumaciones",
-      "Uso_Inhumacion",
-      "Capacidad_Cenizas",
-      "Usos_Cenizas",
-      "Estatus_Capacidad",
-      "Clave_Busqueda_Principal",
-      "Claves_Busqueda_Alternas"
-    ];
-
-    let nextUrl =
-      `https://graph.microsoft.com/v1.0/sites/${CONFIG.siteId}` +
-      `/lists/${CONFIG.listId}/items` +
-      `?$top=500&$expand=fields($select=${fields.join(",")})`;
-
+    const fields = ["Title","Clave_Propiedad","Tipo_Propiedad","Seccion","Manzana","Esta_Construida","Estatus_Venta","Estatus_Uso","Referencia_ProcaP","Fecha_Venta","Fecha_Uso","Fuente_Ultima_Actualizacion","Fecha_Actualizacion","Categoria","Codigo","ZonaId","Cara","Estatus_Ocupacion","Finado","Observaciones","Ultima_Actualizacion_Venta","Ultima_Actualizacion_Ocupacion","Fuente_Actualizacion_Venta","Fuente_Actualizacion_Ocupacion","Observacion_Automatizacion","Capacidad_Inhumaciones","Uso_Inhumacion","Capacidad_Cenizas","Usos_Cenizas","Estatus_Capacidad","Clave_Busqueda_Principal","Claves_Busqueda_Alternas"];
+    let nextUrl = `https://graph.microsoft.com/v1.0/sites/${CONFIG.siteId}/lists/${CONFIG.listId}/items?$top=500&$expand=fields($select=${fields.join(",")})`;
     const graphItems = [];
-
     while (nextUrl) {
       const page = await graphGet(nextUrl, accessToken, 0);
       graphItems.push.apply(graphItems, Array.isArray(page.value) ? page.value : []);
       nextUrl = page["@odata.nextLink"] || "";
     }
-
-    const items = graphItems
-      .map(mapItem)
-      .filter(function (item) {
-        if (!item.codigo) return false;
-        if (item.tipo === "nicho") return Boolean(item.zonaId && item.cara);
-        return Boolean(item.seccion && item.manzana);
-      });
-
-    return {
-      source: "sharepoint",
-      updatedAt: new Date().toISOString(),
-      items: items
-    };
-  }
-
-  function inventoryResponse(data) {
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-store"
-      }
+    const items = graphItems.map(mapItem).filter(function (item) {
+      if (!item.codigo) return false;
+      if (item.tipo === "nicho") return Boolean(item.zonaId && item.cara);
+      return Boolean(item.seccion && item.manzana);
     });
+    return { source: "sharepoint", updatedAt: new Date().toISOString(), items: items };
   }
-
+  function inventoryResponse(data) {
+    return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+  }
   window.fetch = async function (input, init) {
-    if (!isInventoryRequest(input)) {
-      return originalFetch(input, init);
-    }
-
+    if (!isInventoryRequest(input)) return originalFetch(input, init);
     try {
-      if (!inventoryPromise) {
-        inventoryPromise = loadInventoryFromSharePoint();
-      }
-
+      if (!inventoryPromise) inventoryPromise = loadInventoryFromSharePoint();
       const inventory = await inventoryPromise;
       window.JP_INVENTORY_RUNTIME.source = "sharepoint";
       window.JP_INVENTORY_RUNTIME.updatedAt = inventory.updatedAt;
@@ -417,16 +255,7 @@
       window.JP_INVENTORY_RUNTIME.source = "fallback-json";
       window.JP_INVENTORY_RUNTIME.error = error && error.message ? error.message : String(error || "");
       console.error("[Mapa] No se pudo cargar el inventario de SharePoint. Se usará el respaldo JSON.", error);
-
-      try {
-        if (typeof window.toast === "function") {
-          const localHint = ES_LOCAL_DEV
-            ? " Verifica que http://localhost esté registrado como Redirect URI de la app en Entra ID."
-            : "";
-          window.toast(`No fue posible consultar SharePoint. Se cargará el respaldo temporal.${localHint}`, 6500);
-        }
-      } catch {}
-
+      try { if (typeof window.toast === "function") window.toast("No fue posible consultar SharePoint. Se cargará el respaldo temporal.", 6500); } catch {}
       return originalFetch(input, init);
     }
   };
