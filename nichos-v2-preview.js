@@ -570,8 +570,8 @@
     const collection = state.featureCollection;
     if (!collection?.features) return { type: 'FeatureCollection', features: [] };
     if (state.activeFilter === 'todos') {
-    return { ...collection, features: [] };
-  }
+      return { ...collection, features: [] };
+    }
 
     return {
       ...collection,
