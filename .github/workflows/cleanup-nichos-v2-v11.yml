@@ -1,0 +1,35 @@
+name: Limpiar workflows temporales Nichos V2 v11
+
+on:
+  push:
+    branches:
+      - preview/nichos-v2-sabbathycal
+    paths:
+      - .github/workflows/cleanup-nichos-v2-v11.yml
+
+permissions:
+  contents: write
+
+jobs:
+  limpiar:
+    name: Retirar automatizaciones temporales
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Eliminar workflows temporales
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f \
+            .github/workflows/bootstrap-nichos-v2-v11-assets.yml \
+            .github/workflows/trigger-deploy-nichos-v2-v11.yml \
+            .github/workflows/cleanup-nichos-v2-v11.yml
+          git commit -m 'Retirar workflows temporales de Nichos V2 v11'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
