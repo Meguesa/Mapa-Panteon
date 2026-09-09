@@ -61,7 +61,7 @@ jobs:
           test -s deploy/assets/PLN-concavo.png
           test -s deploy/assets/PLN-convexo.png
           test -s deploy/assets/SPN-concavo.png
-          test -s deploy/assets/SPN-convexo.webp
+          test -s deploy/assets/SPN-convexo.png
           test -s deploy/vendor/msal-browser.min.js
           test -s deploy/data/PLN-concavo.geojson
           test -s deploy/data/PLN-convexo.geojson
@@ -74,7 +74,7 @@ jobs:
           grep -q 'dirname(__DIR__, 2)' deploy/index.php
           grep -q 'SPN-convexo' deploy/nichos-v2-preview.js
           grep -q "block !== 'JP'" deploy/nichos-v2-preview.js
-          grep -q 'SPN-convexo.webp' deploy/nichos-v2-preview.js
+          grep -q 'SPN-convexo.png' deploy/nichos-v2-preview.js
           grep -q 'JP_ALLOW_INTERACTIVE_INVENTORY_AUTH' deploy/nichos-v2-preview.js
 
           python3 - <<'PY'
@@ -201,6 +201,6 @@ jobs:
           publish_asset 'deploy/assets/PLN-concavo.png' 'assets/PLN-concavo.png' 'PLN-concavo.png'
           publish_asset 'deploy/assets/PLN-convexo.png' 'assets/PLN-convexo.png' 'PLN-convexo.png'
           publish_asset 'deploy/assets/SPN-concavo.png' 'assets/SPN-concavo.png' 'SPN-concavo.png'
-          publish_asset 'deploy/assets/SPN-convexo.webp' 'assets/SPN-convexo.webp' 'SPN-convexo.webp'
+          publish_asset 'deploy/assets/SPN-convexo.png' 'assets/SPN-convexo.png' 'SPN-convexo.png'
 
           echo "Preview Nichos V2 actualizado correctamente en /mapa/${REMOTE_DIR}/"
