@@ -1,0 +1,28 @@
+name: Activar publicacion Nichos V2 v11
+
+on:
+  push:
+    branches:
+      - preview/nichos-v2-sabbathycal
+    paths:
+      - .github/workflows/trigger-deploy-nichos-v2-v11.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  activar:
+    name: Ejecutar workflow de publicacion
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publicar preview v11
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-nichos-v2-preview.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$GITHUB_REF_NAME"
+          echo "Workflow de publicacion solicitado para ${GITHUB_REF_NAME}."
