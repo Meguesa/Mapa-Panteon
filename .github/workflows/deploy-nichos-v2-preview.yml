@@ -2,6 +2,18 @@ name: Publicar preview Nichos V2
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - preview/nichos-v2-sabbathycal
+    paths:
+      - '.github/workflows/deploy-nichos-v2-preview.yml'
+      - 'tools/build_nichos_v2_preview.py'
+      - 'tools/apply_nichos_v2_v11.py'
+      - 'tools/apply_nichos_v2_png_v12.py'
+      - 'nichos-v2-preview.js'
+      - 'nichos-v2-preview.css'
+      - 'nichos-v2-map-integration.js'
+      - 'assets/nichos-v2-src/**'
 
 permissions:
   contents: read
@@ -38,18 +50,21 @@ jobs:
           rm -rf .tmp-msal
           npm install --prefix .tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
 
-      - name: Construir preview aislado v11
+      - name: Construir preview aislado v12
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile tools/build_nichos_v2_preview.py tools/apply_nichos_v2_v11.py
+          python3 -m py_compile \
+            tools/build_nichos_v2_preview.py \
+            tools/apply_nichos_v2_v11.py \
+            tools/apply_nichos_v2_png_v12.py
           python3 tools/build_nichos_v2_preview.py
-          python3 tools/apply_nichos_v2_v11.py
+          python3 tools/apply_nichos_v2_png_v12.py
           mkdir -p deploy/vendor
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
           rm -rf .tmp-msal
 
-      - name: Validar preview v11
+      - name: Validar preview v12
         shell: bash
         run: |
           set -euo pipefail
@@ -60,10 +75,10 @@ jobs:
           test -s deploy/nichos-v2-preview.js
           test -s deploy/nichos-v2-preview.css
           test -s deploy/nichos-v2-map-integration.js
-          test -s deploy/assets/PLN-concavo.webp
-          test -s deploy/assets/PLN-convexo.webp
-          test -s deploy/assets/SPN-concavo.webp
-          test -s deploy/assets/SPN-convexo.webp
+          test -s deploy/assets/PLN-concavo.png
+          test -s deploy/assets/PLN-convexo.png
+          test -s deploy/assets/SPN-concavo.png
+          test -s deploy/assets/SPN-convexo.png
           test -s deploy/vendor/msal-browser.min.js
           test -s deploy/data/PLN-concavo.geojson
           test -s deploy/data/PLN-convexo.geojson
@@ -73,14 +88,15 @@ jobs:
 
           php -l deploy/index.php
           node --check deploy/nichos-v2-preview.js
-          grep -q 'nichos-v2-preview.css?v=11' deploy/index.php
-          grep -q 'nichos-v2-preview.js?v=11' deploy/index.php
-          grep -q 'nichos-v2-map-integration.js?v=11' deploy/index.php
+          grep -q 'nichos-v2-preview.css?v=12' deploy/index.php
+          grep -q 'nichos-v2-preview.js?v=12' deploy/index.php
+          grep -q 'nichos-v2-map-integration.js?v=12' deploy/index.php
           grep -q 'dirname(__DIR__, 2)' deploy/index.php
-          grep -q 'SPN-convexo.webp?v=11' deploy/nichos-v2-preview.js
+          grep -q 'SPN-convexo.png?v=12' deploy/nichos-v2-preview.js
           grep -q 'state.nichesVisible = !state.nichesVisible' deploy/nichos-v2-preview.js
           grep -q 'function renderVectorLabels' deploy/nichos-v2-preview.js
           grep -q 'nv2LabelsPane' deploy/nichos-v2-preview.js
+          grep -q 'nv2-niche-label-bg' deploy/nichos-v2-preview.js
           grep -q "block !== 'JP'" deploy/nichos-v2-preview.js
           grep -q 'JP_ALLOW_INTERACTIVE_INVENTORY_AUTH' deploy/nichos-v2-preview.js
 
@@ -190,8 +206,8 @@ jobs:
             cd '${REMOTE_DIR}';
             put 'deploy/data/nichos-zonas.geojson' -o 'data/nichos-zonas.geojson';
             put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
-            put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
             put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
+            put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
             put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
           " 900
 
@@ -207,9 +223,9 @@ jobs:
             " 1200
           }
 
-          publish_asset 'deploy/assets/PLN-concavo.webp' 'assets/PLN-concavo.webp' 'PLN-concavo.webp'
-          publish_asset 'deploy/assets/PLN-convexo.webp' 'assets/PLN-convexo.webp' 'PLN-convexo.webp'
-          publish_asset 'deploy/assets/SPN-concavo.webp' 'assets/SPN-concavo.webp' 'SPN-concavo.webp'
-          publish_asset 'deploy/assets/SPN-convexo.webp' 'assets/SPN-convexo.webp' 'SPN-convexo.webp'
+          publish_asset 'deploy/assets/PLN-concavo.png' 'assets/PLN-concavo.png' 'PLN-concavo.png'
+          publish_asset 'deploy/assets/PLN-convexo.png' 'assets/PLN-convexo.png' 'PLN-convexo.png'
+          publish_asset 'deploy/assets/SPN-concavo.png' 'assets/SPN-concavo.png' 'SPN-concavo.png'
+          publish_asset 'deploy/assets/SPN-convexo.png' 'assets/SPN-convexo.png' 'SPN-convexo.png'
 
-          echo "Preview Nichos V2 actualizado correctamente en /mapa/${REMOTE_DIR}/"
+          echo "Preview Nichos V2 v12 actualizado correctamente en /mapa/${REMOTE_DIR}/"
