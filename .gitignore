@@ -1,0 +1,25 @@
+# Archivos generados
+/deploy/
+/.tmp-msal/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Temporales y respaldos locales
+*.tmp
+*.bak
+*.old
+*~
+/backups/
+
+# Logs
+*.log
