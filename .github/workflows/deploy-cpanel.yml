@@ -4,12 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       publicar_datos_estructurales:
-        description: 'Republicar tambien GeoJSON, geometrías y activos estructurales'
+        description: 'Republicar GeoJSON, inventario base, mapa base y data/lotes'
         required: false
         default: false
         type: boolean
       publicar_solo_referencias_visuales:
-        description: 'Publicar solo el JS y las fotos de referencias visuales (Americano/VIP)'
+        description: 'Publicar solamente las fotos Americano/VIP y su JS'
+        required: false
+        default: false
+        type: boolean
+      publicar_imagenes_nichos_v2:
+        description: 'Republicar las 4 imagenes PNG grandes de Nichos V2'
         required: false
         default: false
         type: boolean
@@ -60,53 +65,67 @@ jobs:
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
           rm -rf .tmp-msal
 
-      - name: Validar paquete y datos estructurales
+      - name: Validar paquete de produccion
         shell: bash
         run: |
           set -euo pipefail
-          test -s deploy/index.php
-          test -s deploy/app.js
-          test -s deploy/styles.css
-          test -s deploy/sharepoint-inventario.js
-          test -s deploy/public-ui-fixes.js
-          test -s deploy/section-visual-references.js
-          test -s deploy/portal-integration.css
-          test -s deploy/account-menu.css
-          test -s deploy/mapa-enhancements.js
-          test -s deploy/lotes-nv2-match.js
-          test -s deploy/nichos-v2-preview.js
-          test -s deploy/nichos-v2-preview.css
-          test -s deploy/nichos-v2-map-integration.js
-          test -s deploy/assets/logo.jpg
-          test -s deploy/assets/map/base-public.webp
-          test -s deploy/assets/americano-01.webp
-          test -s deploy/assets/americano-02.webp
-          test -s deploy/assets/americano-03.webp
-          test -s deploy/assets/americano-04.webp
-          test -s deploy/assets/vip-01.webp
-          test -s deploy/assets/vip-02.webp
-          test -s deploy/assets/vip-03.webp
-          test -s deploy/assets/PLN-concavo.png
-          test -s deploy/assets/PLN-convexo.png
-          test -s deploy/assets/SPN-concavo.png
-          test -s deploy/assets/SPN-convexo.png
-          test -s deploy/vendor/msal-browser.min.js
+
+          required_files=(
+            deploy/index.php
+            deploy/app.js
+            deploy/styles.css
+            deploy/sharepoint-inventario.js
+            deploy/public-ui-fixes.js
+            deploy/section-visual-references.js
+            deploy/portal-integration.css
+            deploy/account-menu.css
+            deploy/mapa-enhancements.js
+            deploy/lotes-nv2-match.js
+            deploy/nichos-v2-preview.js
+            deploy/nichos-v2-preview.css
+            deploy/nichos-v2-map-integration.js
+            deploy/assets/logo.jpg
+            deploy/assets/map/base-public.webp
+            deploy/assets/americano-01.webp
+            deploy/assets/americano-02.webp
+            deploy/assets/americano-03.webp
+            deploy/assets/americano-04.webp
+            deploy/assets/vip-01.webp
+            deploy/assets/vip-02.webp
+            deploy/assets/vip-03.webp
+            deploy/assets/PLN-concavo.png
+            deploy/assets/PLN-convexo.png
+            deploy/assets/SPN-concavo.png
+            deploy/assets/SPN-convexo.png
+            deploy/vendor/msal-browser.min.js
+            deploy/data/lotes.json
+            deploy/data/secciones.geojson
+            deploy/data/secciones-top.geojson
+            deploy/data/catalogo-propiedades.json
+            deploy/data/inventario-base.json
+            deploy/data/inventario-overrides.json
+            deploy/data/paquetes.json
+            deploy/data/PLN-concavo.geojson
+            deploy/data/PLN-convexo.geojson
+            deploy/data/SPN-concavo.geojson
+            deploy/data/SPN-convexo.geojson
+            deploy/data/nichos-zonas.geojson
+          )
+
+          for file in "${required_files[@]}"; do
+            test -s "$file"
+          done
+
           test -d deploy/data
-          test -s deploy/data/lotes.json
-          test -s deploy/data/secciones.geojson
-          test -s deploy/data/secciones-top.geojson
-          test -s deploy/data/catalogo-propiedades.json
-          test -s deploy/data/inventario-base.json
-          test -s deploy/data/inventario-overrides.json
-          test -s deploy/data/paquetes.json
-          test -s deploy/data/PLN-concavo.geojson
-          test -s deploy/data/PLN-convexo.geojson
-          test -s deploy/data/SPN-concavo.geojson
-          test -s deploy/data/SPN-convexo.geojson
-          test -s deploy/data/nichos-zonas.geojson
+          test -d deploy/data/lotes
+
           php -l deploy/index.php
-          node --check deploy/nichos-v2-preview.js
+          node --check deploy/app.js
+          node --check deploy/public-ui-fixes.js
           node --check deploy/lotes-nv2-match.js
+          node --check deploy/nichos-v2-preview.js
+          node --check deploy/nichos-v2-map-integration.js
+
           grep -q 'Mapa del Panteón' deploy/index.php
           grep -q 'portal_require_authentication' deploy/index.php
           grep -q 'section-visual-references.js' deploy/index.php
@@ -118,6 +137,8 @@ jobs:
           grep -q 'state.nichesVisible = !state.nichesVisible' deploy/nichos-v2-preview.js
           grep -q 'function renderVectorLabels' deploy/nichos-v2-preview.js
           grep -q 'function fitWholeImage' deploy/nichos-v2-preview.js
+          grep -q 'syncLotInteractivity' deploy/lotes-nv2-match.js
+          grep -q 'seleccion por clic habilitada' deploy/lotes-nv2-match.js
 
           python3 - <<'PY'
           import json
@@ -152,142 +173,183 @@ jobs:
           print(f'Validados correctamente {len(files)} archivos JSON/GeoJSON.')
           PY
 
-      - name: Instalar cliente FTPS resiliente
+      - name: Preparar paquetes de publicacion
         shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y lftp
-
-      - name: Publicar Mapa por lotes FTPS
-        shell: bash
-        timeout-minutes: 25
-        env:
-          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          FULL_DATA: ${{ inputs.publicar_datos_estructurales }}
-          VISUAL_ONLY: ${{ inputs.publicar_solo_referencias_visuales }}
         run: |
           set -euo pipefail
-          FTP_URL='ftp://whm95.mxwebserver.com:21'
+          rm -rf deploy-code deploy-visual deploy-nichos-assets deploy-structural
 
-          run_batch() {
-            local label="$1"
-            local timeout_seconds="$2"
-            local commands="$3"
+          # Paquete normal: solo codigo, dependencias, referencias visuales pequenas
+          # y geometria pequena de Nichos V2. No vuelve a transferir imagenes de 40-55 MB.
+          mkdir -p deploy-code/assets deploy-code/data deploy-code/vendor
 
-            for attempt in 1 2 3; do
-              echo "[${label}] intento ${attempt} de 3"
-              if timeout --kill-after=15s "${timeout_seconds}s" lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_URL" -e "
-                set cmd:fail-exit yes;
-                set ftp:passive-mode true;
-                set ftp:ssl-force true;
-                set ftp:ssl-protect-data true;
-                set ftp:ssl-auth TLS;
-                set ftp:sync-mode true;
-                set ssl:verify-certificate yes;
-                set ssl:check-hostname yes;
-                set net:timeout 30;
-                set net:max-retries 2;
-                set net:reconnect-interval-base 5;
-                set net:reconnect-interval-max 15;
-                set xfer:clobber yes;
-                set cmd:fail-exit no;
-                mkdir assets;
-                mkdir data;
-                mkdir vendor;
-                set cmd:fail-exit yes;
-                ${commands}
-                bye;
-              "; then
-                echo "[${label}] OK"
-                return 0
-              fi
+          for file in \
+            index.php \
+            app.js \
+            styles.css \
+            portal-integration.css \
+            account-menu.css \
+            mapa-enhancements.js \
+            lotes-nv2-match.js \
+            public-ui-fixes.js \
+            section-visual-references.js \
+            sharepoint-inventario.js \
+            nichos-v2-preview.js \
+            nichos-v2-preview.css \
+            nichos-v2-map-integration.js; do
+            cp "deploy/$file" "deploy-code/$file"
+          done
 
-              if [ "$attempt" -lt 3 ]; then
-                echo "[${label}] fallo. Reintento completo en 20 segundos..."
-                sleep 20
-              fi
-            done
+          cp deploy/vendor/msal-browser.min.js deploy-code/vendor/msal-browser.min.js
+          cp deploy/assets/logo.jpg deploy-code/assets/logo.jpg
 
-            echo "[${label}] ERROR despues de 3 intentos"
-            return 1
-          }
+          for file in \
+            americano-01.webp \
+            americano-02.webp \
+            americano-03.webp \
+            americano-04.webp \
+            vip-01.webp \
+            vip-02.webp \
+            vip-03.webp; do
+            cp "deploy/assets/$file" "deploy-code/assets/$file"
+          done
 
-          CODE_AND_SMALL_DATA="
-            put 'deploy/index.php' -o 'index.php';
-            put 'deploy/app.js' -o 'app.js';
-            put 'deploy/styles.css' -o 'styles.css';
-            put 'deploy/portal-integration.css' -o 'portal-integration.css';
-            put 'deploy/account-menu.css' -o 'account-menu.css';
-            put 'deploy/mapa-enhancements.js' -o 'mapa-enhancements.js';
-            put 'deploy/lotes-nv2-match.js' -o 'lotes-nv2-match.js';
-            put 'deploy/public-ui-fixes.js' -o 'public-ui-fixes.js';
-            put 'deploy/section-visual-references.js' -o 'section-visual-references.js';
-            put 'deploy/sharepoint-inventario.js' -o 'sharepoint-inventario.js';
-            put 'deploy/nichos-v2-preview.js' -o 'nichos-v2-preview.js';
-            put 'deploy/nichos-v2-preview.css' -o 'nichos-v2-preview.css';
-            put 'deploy/nichos-v2-map-integration.js' -o 'nichos-v2-map-integration.js';
-            put 'deploy/vendor/msal-browser.min.js' -o 'vendor/msal-browser.min.js';
-            put 'deploy/data/nichos-zonas.geojson' -o 'data/nichos-zonas.geojson';
-            put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
-            put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
-            put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
-            put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
-            put 'deploy/data/lotes.json' -o 'data/lotes.json';
-            put 'deploy/data/paquetes.json' -o 'data/paquetes.json';
-            put 'deploy/data/inventario-overrides.json' -o 'data/inventario-overrides.json';
-          "
+          for file in \
+            nichos-zonas.geojson \
+            PLN-concavo.geojson \
+            PLN-convexo.geojson \
+            SPN-concavo.geojson \
+            SPN-convexo.geojson \
+            lotes.json \
+            paquetes.json \
+            inventario-overrides.json; do
+            cp "deploy/data/$file" "deploy-code/data/$file"
+          done
 
-          VISUAL_REFERENCES="
-            put 'deploy/section-visual-references.js' -o 'section-visual-references.js';
-            put 'deploy/assets/americano-01.webp' -o 'assets/americano-01.webp';
-            put 'deploy/assets/americano-02.webp' -o 'assets/americano-02.webp';
-            put 'deploy/assets/americano-03.webp' -o 'assets/americano-03.webp';
-            put 'deploy/assets/americano-04.webp' -o 'assets/americano-04.webp';
-            put 'deploy/assets/vip-01.webp' -o 'assets/vip-01.webp';
-            put 'deploy/assets/vip-02.webp' -o 'assets/vip-02.webp';
-            put 'deploy/assets/vip-03.webp' -o 'assets/vip-03.webp';
-          "
+          # Paquete exclusivo de referencias visuales.
+          mkdir -p deploy-visual/assets
+          cp deploy/section-visual-references.js deploy-visual/section-visual-references.js
+          for file in \
+            americano-01.webp \
+            americano-02.webp \
+            americano-03.webp \
+            americano-04.webp \
+            vip-01.webp \
+            vip-02.webp \
+            vip-03.webp; do
+            cp "deploy/assets/$file" "deploy-visual/assets/$file"
+          done
 
-          NICHOS_IMAGES="
-            put -c 'deploy/assets/PLN-concavo.png' -o 'assets/PLN-concavo.png';
-            put -c 'deploy/assets/PLN-convexo.png' -o 'assets/PLN-convexo.png';
-            put -c 'deploy/assets/SPN-concavo.png' -o 'assets/SPN-concavo.png';
-            put -c 'deploy/assets/SPN-convexo.png' -o 'assets/SPN-convexo.png';
-          "
+          # Paquete de imagenes grandes de Nichos V2. Solo se publica bajo solicitud.
+          mkdir -p deploy-nichos-assets/assets
+          for file in \
+            PLN-concavo.png \
+            PLN-convexo.png \
+            SPN-concavo.png \
+            SPN-convexo.png; do
+            cp "deploy/assets/$file" "deploy-nichos-assets/assets/$file"
+          done
 
-          if [ "$VISUAL_ONLY" = "true" ]; then
-            echo "=== Publicacion exclusiva de referencias visuales ==="
-            run_batch 'referencias visuales' 300 "$VISUAL_REFERENCES"
-            echo "Publicacion exclusiva de referencias visuales completada correctamente."
-            exit 0
-          fi
+          # Paquete estructural. Solo se publica bajo solicitud.
+          mkdir -p deploy-structural/assets/map deploy-structural/data
+          cp deploy/assets/map/base-public.webp deploy-structural/assets/map/base-public.webp
+          cp deploy/data/catalogo-propiedades.json deploy-structural/data/catalogo-propiedades.json
+          cp deploy/data/inventario-base.json deploy-structural/data/inventario-base.json
+          cp deploy/data/nichos-overlay.geojson deploy-structural/data/nichos-overlay.geojson
+          cp deploy/data/secciones-top.geojson deploy-structural/data/secciones-top.geojson
+          cp deploy/data/secciones.geojson deploy-structural/data/secciones.geojson
+          cp -R deploy/data/lotes deploy-structural/data/lotes
 
-          echo "=== Publicacion agrupada de codigo y datos pequenos ==="
-          run_batch 'codigo y datos pequenos' 420 "$CODE_AND_SMALL_DATA"
+          echo 'Paquete normal:'
+          du -sh deploy-code
+          echo 'Referencias visuales:'
+          du -sh deploy-visual
+          echo 'Imagenes grandes Nichos V2:'
+          du -sh deploy-nichos-assets
+          echo 'Datos estructurales:'
+          du -sh deploy-structural
 
-          echo "=== Publicacion agrupada de referencias visuales ==="
-          run_batch 'referencias visuales' 300 "$VISUAL_REFERENCES"
-
-          echo "=== Publicacion agrupada de imagenes grandes de Nichos V2 ==="
-          run_batch 'imagenes Nichos V2' 1500 "$NICHOS_IMAGES"
-
-          if [ "$FULL_DATA" = "true" ]; then
-            echo "=== Republicacion estructural solicitada ==="
-
-            STRUCTURAL_FILES="
-              put 'deploy/data/catalogo-propiedades.json' -o 'data/catalogo-propiedades.json';
-              put 'deploy/data/inventario-base.json' -o 'data/inventario-base.json';
-              put 'deploy/data/nichos-overlay.geojson' -o 'data/nichos-overlay.geojson';
-              put 'deploy/data/secciones-top.geojson' -o 'data/secciones-top.geojson';
-              put 'deploy/data/secciones.geojson' -o 'data/secciones.geojson';
-              put 'deploy/assets/logo.jpg' -o 'assets/logo.jpg';
-              put -c 'deploy/assets/map/base-public.webp' -o 'assets/map/base-public.webp';
-              mirror -R --only-newer --parallel=1 'deploy/data/lotes' 'data/lotes';
-            "
-            run_batch 'datos estructurales' 1500 "$STRUCTURAL_FILES"
+      - name: Diagnosticar puerto FTPS
+        shell: bash
+        continue-on-error: true
+        run: |
+          set +e
+          echo 'Resolucion DNS:'
+          getent ahostsv4 whm95.mxwebserver.com | head -5
+          echo 'Prueba TCP a puerto 21 (15 segundos):'
+          timeout 15 bash -c 'cat < /dev/null > /dev/tcp/whm95.mxwebserver.com/21'
+          rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo 'Puerto 21 accesible desde el runner.'
           else
-            echo "Datos estructurales sin cambios: se conserva la version estable ya publicada en cPanel."
+            echo '::warning::No se pudo abrir TCP/21 desde el runner. Si el despliegue falla tambien, revisar firewall/FTP en cPanel.'
           fi
+          exit 0
 
-          echo "Publicacion del Mapa completada correctamente con sesiones FTPS agrupadas."
+      - name: Publicar solo referencias visuales
+        if: ${{ inputs.publicar_solo_referencias_visuales == true }}
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: whm95.mxwebserver.com
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: strict
+          timeout: 180000
+          local-dir: ./deploy-visual/
+          server-dir: ./
+          state-name: .ftp-deploy-sync-state-visual-v2.json
+          dry-run: false
+          log-level: standard
+
+      - name: Publicar codigo y datos pequenos
+        if: ${{ inputs.publicar_solo_referencias_visuales == false }}
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: whm95.mxwebserver.com
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: strict
+          timeout: 180000
+          local-dir: ./deploy-code/
+          server-dir: ./
+          state-name: .ftp-deploy-sync-state-code-v2.json
+          dry-run: false
+          log-level: standard
+
+      - name: Publicar imagenes grandes de Nichos V2
+        if: ${{ inputs.publicar_solo_referencias_visuales == false && inputs.publicar_imagenes_nichos_v2 == true }}
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: whm95.mxwebserver.com
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: strict
+          timeout: 900000
+          local-dir: ./deploy-nichos-assets/
+          server-dir: ./
+          state-name: .ftp-deploy-sync-state-nichos-v2.json
+          dry-run: false
+          log-level: standard
+
+      - name: Publicar datos estructurales
+        if: ${{ inputs.publicar_solo_referencias_visuales == false && inputs.publicar_datos_estructurales == true }}
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: whm95.mxwebserver.com
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: strict
+          timeout: 900000
+          local-dir: ./deploy-structural/
+          server-dir: ./
+          state-name: .ftp-deploy-sync-state-structural-v2.json
+          dry-run: false
+          log-level: standard
