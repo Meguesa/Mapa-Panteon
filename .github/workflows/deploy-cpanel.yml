@@ -73,6 +73,7 @@ jobs:
           test -s deploy/portal-integration.css
           test -s deploy/account-menu.css
           test -s deploy/mapa-enhancements.js
+          test -s deploy/lotes-nv2-match.js
           test -s deploy/nichos-v2-preview.js
           test -s deploy/nichos-v2-preview.css
           test -s deploy/nichos-v2-map-integration.js
@@ -105,9 +106,11 @@ jobs:
           test -s deploy/data/nichos-zonas.geojson
           php -l deploy/index.php
           node --check deploy/nichos-v2-preview.js
+          node --check deploy/lotes-nv2-match.js
           grep -q 'Mapa del Panteón' deploy/index.php
           grep -q 'portal_require_authentication' deploy/index.php
           grep -q 'section-visual-references.js' deploy/index.php
+          grep -q 'lotes-nv2-match.js?v=1' deploy/index.php
           grep -q 'nichos-v2-preview.css?v=14' deploy/index.php
           grep -q 'nichos-v2-preview.js?v=14' deploy/index.php
           grep -q 'nichos-v2-map-integration.js?v=14' deploy/index.php
@@ -263,6 +266,7 @@ jobs:
           upload_file "deploy/portal-integration.css" "portal-integration.css" "portal-integration.css"
           upload_file "deploy/account-menu.css" "account-menu.css" "account-menu.css"
           upload_file "deploy/mapa-enhancements.js" "mapa-enhancements.js" "mapa-enhancements.js"
+          upload_file "deploy/lotes-nv2-match.js" "lotes-nv2-match.js" "lotes-nv2-match.js"
           upload_file "deploy/public-ui-fixes.js" "public-ui-fixes.js" "public-ui-fixes.js"
           upload_file "deploy/section-visual-references.js" "section-visual-references.js" "referencias visuales"
           upload_file "deploy/sharepoint-inventario.js" "sharepoint-inventario.js" "sharepoint-inventario.js"
