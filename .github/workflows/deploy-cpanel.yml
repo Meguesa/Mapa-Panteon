@@ -158,8 +158,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lftp
 
-      - name: Publicar archivos del Mapa individualmente
+      - name: Publicar Mapa por lotes FTPS
         shell: bash
+        timeout-minutes: 25
         env:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
@@ -167,56 +168,16 @@ jobs:
           VISUAL_ONLY: ${{ inputs.publicar_solo_referencias_visuales }}
         run: |
           set -euo pipefail
+          FTP_URL='ftp://whm95.mxwebserver.com:21'
 
-          upload_file() {
-            local local_file="$1"
-            local remote_file="$2"
-            local label="$3"
-            local timeout_seconds="${4:-90}"
-
-            if [ ! -f "$local_file" ]; then
-              echo "[$label] ERROR: no existe $local_file"
-              return 1
-            fi
+          run_batch() {
+            local label="$1"
+            local timeout_seconds="$2"
+            local commands="$3"
 
             for attempt in 1 2 3; do
-              echo "[$label] intento ${attempt} de 3 -> ${remote_file}"
-
-              if timeout --kill-after=10s "${timeout_seconds}s" lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
-                set cmd:fail-exit yes;
-                set ftp:passive-mode true;
-                set ftp:ssl-force true;
-                set ftp:ssl-protect-data true;
-                set ftp:ssl-auth TLS;
-                set ftp:sync-mode false;
-                set ssl:verify-certificate yes;
-                set ssl:check-hostname yes;
-                set net:timeout 30;
-                set net:max-retries 1;
-                put -c '$local_file' -o '$remote_file.tmp';
-                rm -f '$remote_file';
-                mv '$remote_file.tmp' '$remote_file';
-                bye;
-              "; then
-                echo "[$label] OK"
-                return 0
-              fi
-
-              if [ "$attempt" -lt 3 ]; then
-                echo "[$label] transferencia fallida. Reintento en 10 segundos..."
-                sleep 10
-              fi
-            done
-
-            echo "[$label] ERROR despues de 3 intentos"
-            return 1
-          }
-
-          upload_visual_references_batch() {
-            for attempt in 1 2 3; do
-              echo "[referencias visuales] lote completo: intento ${attempt} de 3"
-
-              if timeout --kill-after=10s 180s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
+              echo "[${label}] intento ${attempt} de 3"
+              if timeout --kill-after=15s "${timeout_seconds}s" lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_URL" -e "
                 set cmd:fail-exit yes;
                 set ftp:passive-mode true;
                 set ftp:ssl-force true;
@@ -226,99 +187,105 @@ jobs:
                 set ssl:verify-certificate yes;
                 set ssl:check-hostname yes;
                 set net:timeout 30;
-                set net:max-retries 1;
+                set net:max-retries 2;
+                set net:reconnect-interval-base 5;
+                set net:reconnect-interval-max 15;
+                set xfer:clobber yes;
                 mkdir -p assets;
-                put 'deploy/section-visual-references.js' -o 'section-visual-references.js';
-                put 'deploy/assets/americano-01.webp' -o 'assets/americano-01.webp';
-                put 'deploy/assets/americano-02.webp' -o 'assets/americano-02.webp';
-                put 'deploy/assets/americano-03.webp' -o 'assets/americano-03.webp';
-                put 'deploy/assets/americano-04.webp' -o 'assets/americano-04.webp';
-                put 'deploy/assets/vip-01.webp' -o 'assets/vip-01.webp';
-                put 'deploy/assets/vip-02.webp' -o 'assets/vip-02.webp';
-                put 'deploy/assets/vip-03.webp' -o 'assets/vip-03.webp';
+                mkdir -p data;
+                mkdir -p vendor;
+                ${commands}
                 bye;
               "; then
-                echo "[referencias visuales] JS y 7 imagenes publicados correctamente en una sola sesion FTPS."
+                echo "[${label}] OK"
                 return 0
               fi
 
               if [ "$attempt" -lt 3 ]; then
-                echo "[referencias visuales] lote fallido. Reintento en 12 segundos..."
-                sleep 12
+                echo "[${label}] fallo. Reintento completo en 20 segundos..."
+                sleep 20
               fi
             done
 
-            echo "[referencias visuales] ERROR despues de 3 intentos del lote completo"
+            echo "[${label}] ERROR despues de 3 intentos"
             return 1
           }
 
+          CODE_AND_SMALL_DATA="
+            put 'deploy/index.php' -o 'index.php';
+            put 'deploy/app.js' -o 'app.js';
+            put 'deploy/styles.css' -o 'styles.css';
+            put 'deploy/portal-integration.css' -o 'portal-integration.css';
+            put 'deploy/account-menu.css' -o 'account-menu.css';
+            put 'deploy/mapa-enhancements.js' -o 'mapa-enhancements.js';
+            put 'deploy/lotes-nv2-match.js' -o 'lotes-nv2-match.js';
+            put 'deploy/public-ui-fixes.js' -o 'public-ui-fixes.js';
+            put 'deploy/section-visual-references.js' -o 'section-visual-references.js';
+            put 'deploy/sharepoint-inventario.js' -o 'sharepoint-inventario.js';
+            put 'deploy/nichos-v2-preview.js' -o 'nichos-v2-preview.js';
+            put 'deploy/nichos-v2-preview.css' -o 'nichos-v2-preview.css';
+            put 'deploy/nichos-v2-map-integration.js' -o 'nichos-v2-map-integration.js';
+            put 'deploy/vendor/msal-browser.min.js' -o 'vendor/msal-browser.min.js';
+            put 'deploy/data/nichos-zonas.geojson' -o 'data/nichos-zonas.geojson';
+            put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
+            put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
+            put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
+            put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
+            put 'deploy/data/lotes.json' -o 'data/lotes.json';
+            put 'deploy/data/paquetes.json' -o 'data/paquetes.json';
+            put 'deploy/data/inventario-overrides.json' -o 'data/inventario-overrides.json';
+          "
+
+          VISUAL_REFERENCES="
+            put 'deploy/section-visual-references.js' -o 'section-visual-references.js';
+            put 'deploy/assets/americano-01.webp' -o 'assets/americano-01.webp';
+            put 'deploy/assets/americano-02.webp' -o 'assets/americano-02.webp';
+            put 'deploy/assets/americano-03.webp' -o 'assets/americano-03.webp';
+            put 'deploy/assets/americano-04.webp' -o 'assets/americano-04.webp';
+            put 'deploy/assets/vip-01.webp' -o 'assets/vip-01.webp';
+            put 'deploy/assets/vip-02.webp' -o 'assets/vip-02.webp';
+            put 'deploy/assets/vip-03.webp' -o 'assets/vip-03.webp';
+          "
+
+          NICHOS_IMAGES="
+            put -c 'deploy/assets/PLN-concavo.png' -o 'assets/PLN-concavo.png';
+            put -c 'deploy/assets/PLN-convexo.png' -o 'assets/PLN-convexo.png';
+            put -c 'deploy/assets/SPN-concavo.png' -o 'assets/SPN-concavo.png';
+            put -c 'deploy/assets/SPN-convexo.png' -o 'assets/SPN-convexo.png';
+          "
+
           if [ "$VISUAL_ONLY" = "true" ]; then
             echo "=== Publicacion exclusiva de referencias visuales ==="
-            upload_visual_references_batch
+            run_batch 'referencias visuales' 300 "$VISUAL_REFERENCES"
             echo "Publicacion exclusiva de referencias visuales completada correctamente."
             exit 0
           fi
 
-          echo "=== Publicacion de codigo principal ==="
-          upload_file "deploy/index.php" "index.php" "index.php"
-          upload_file "deploy/app.js" "app.js" "app.js"
-          upload_file "deploy/styles.css" "styles.css" "styles.css"
-          upload_file "deploy/portal-integration.css" "portal-integration.css" "portal-integration.css"
-          upload_file "deploy/account-menu.css" "account-menu.css" "account-menu.css"
-          upload_file "deploy/mapa-enhancements.js" "mapa-enhancements.js" "mapa-enhancements.js"
-          upload_file "deploy/lotes-nv2-match.js" "lotes-nv2-match.js" "lotes-nv2-match.js"
-          upload_file "deploy/public-ui-fixes.js" "public-ui-fixes.js" "public-ui-fixes.js"
-          upload_file "deploy/section-visual-references.js" "section-visual-references.js" "referencias visuales"
-          upload_file "deploy/sharepoint-inventario.js" "sharepoint-inventario.js" "sharepoint-inventario.js"
-          upload_file "deploy/nichos-v2-preview.js" "nichos-v2-preview.js" "nichos-v2-preview.js"
-          upload_file "deploy/nichos-v2-preview.css" "nichos-v2-preview.css" "nichos-v2-preview.css"
-          upload_file "deploy/nichos-v2-map-integration.js" "nichos-v2-map-integration.js" "nichos-v2-map-integration.js"
-          upload_file "deploy/vendor/msal-browser.min.js" "vendor/msal-browser.min.js" "MSAL local"
+          echo "=== Publicacion agrupada de codigo y datos pequenos ==="
+          run_batch 'codigo y datos pequenos' 420 "$CODE_AND_SMALL_DATA"
 
-          echo "=== Referencias visuales ==="
-          upload_file "deploy/assets/americano-01.webp" "assets/americano-01.webp" "americano-01"
-          upload_file "deploy/assets/americano-02.webp" "assets/americano-02.webp" "americano-02"
-          upload_file "deploy/assets/americano-03.webp" "assets/americano-03.webp" "americano-03"
-          upload_file "deploy/assets/americano-04.webp" "assets/americano-04.webp" "americano-04"
-          upload_file "deploy/assets/vip-01.webp" "assets/vip-01.webp" "vip-01"
-          upload_file "deploy/assets/vip-02.webp" "assets/vip-02.webp" "vip-02"
-          upload_file "deploy/assets/vip-03.webp" "assets/vip-03.webp" "vip-03"
+          echo "=== Publicacion agrupada de referencias visuales ==="
+          run_batch 'referencias visuales' 300 "$VISUAL_REFERENCES"
 
-          echo "=== Nichos V2 ==="
-          upload_file "deploy/data/nichos-zonas.geojson" "data/nichos-zonas.geojson" "nichos-zonas-v2"
-          upload_file "deploy/data/PLN-concavo.geojson" "data/PLN-concavo.geojson" "PLN-concavo-geojson"
-          upload_file "deploy/data/PLN-convexo.geojson" "data/PLN-convexo.geojson" "PLN-convexo-geojson"
-          upload_file "deploy/data/SPN-concavo.geojson" "data/SPN-concavo.geojson" "SPN-concavo-geojson"
-          upload_file "deploy/data/SPN-convexo.geojson" "data/SPN-convexo.geojson" "SPN-convexo-geojson"
-          upload_file "deploy/assets/PLN-concavo.png" "assets/PLN-concavo.png" "PLN-concavo" 1200
-          upload_file "deploy/assets/PLN-convexo.png" "assets/PLN-convexo.png" "PLN-convexo" 1200
-          upload_file "deploy/assets/SPN-concavo.png" "assets/SPN-concavo.png" "SPN-concavo" 1200
-          upload_file "deploy/assets/SPN-convexo.png" "assets/SPN-convexo.png" "SPN-convexo" 1200
-
-          echo "=== Archivos de datos pequenos necesarios ==="
-          upload_file "deploy/data/lotes.json" "data/lotes.json" "lotes.json"
-          upload_file "deploy/data/paquetes.json" "data/paquetes.json" "paquetes.json"
-          upload_file "deploy/data/inventario-overrides.json" "data/inventario-overrides.json" "inventario-overrides.json"
+          echo "=== Publicacion agrupada de imagenes grandes de Nichos V2 ==="
+          run_batch 'imagenes Nichos V2' 1500 "$NICHOS_IMAGES"
 
           if [ "$FULL_DATA" = "true" ]; then
             echo "=== Republicacion estructural solicitada ==="
 
-            upload_file "deploy/data/catalogo-propiedades.json" "data/catalogo-propiedades.json" "catalogo-propiedades.json"
-            upload_file "deploy/data/inventario-base.json" "data/inventario-base.json" "inventario-base.json"
-            upload_file "deploy/data/nichos-overlay.geojson" "data/nichos-overlay.geojson" "nichos-overlay.geojson"
-            upload_file "deploy/data/secciones-top.geojson" "data/secciones-top.geojson" "secciones-top.geojson"
-            upload_file "deploy/data/secciones.geojson" "data/secciones.geojson" "secciones.geojson"
-            upload_file "deploy/assets/logo.jpg" "assets/logo.jpg" "logo"
-            upload_file "deploy/assets/map/base-public.webp" "assets/map/base-public.webp" "mapa base" 1200
-
-            while IFS= read -r -d '' file; do
-              remote="${file#deploy/}"
-              upload_file "$file" "$remote" "$remote"
-            done < <(find deploy/data/lotes -type f -print0 | sort -z)
-
-            echo "Las imagenes legacy de assets/nichos se mantienen fuera del FTPS; produccion usa ahora Nichos V2."
+            STRUCTURAL_FILES="
+              put 'deploy/data/catalogo-propiedades.json' -o 'data/catalogo-propiedades.json';
+              put 'deploy/data/inventario-base.json' -o 'data/inventario-base.json';
+              put 'deploy/data/nichos-overlay.geojson' -o 'data/nichos-overlay.geojson';
+              put 'deploy/data/secciones-top.geojson' -o 'data/secciones-top.geojson';
+              put 'deploy/data/secciones.geojson' -o 'data/secciones.geojson';
+              put 'deploy/assets/logo.jpg' -o 'assets/logo.jpg';
+              put -c 'deploy/assets/map/base-public.webp' -o 'assets/map/base-public.webp';
+              mirror -R --only-newer --parallel=1 'deploy/data/lotes' 'data/lotes';
+            "
+            run_batch 'datos estructurales' 1500 "$STRUCTURAL_FILES"
           else
             echo "Datos estructurales sin cambios: se conserva la version estable ya publicada en cPanel."
           fi
 
-          echo "Publicacion del Mapa con Nichos V2 completada correctamente."
+          echo "Publicacion del Mapa completada correctamente con sesiones FTPS agrupadas."
