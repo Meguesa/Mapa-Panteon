@@ -143,11 +143,11 @@ jobs:
           run_lftp() {
             local label="$1"
             local commands="$2"
-            local timeout_seconds="${3:-900}"
+            local timeout_seconds="${3:-300}"
 
             for attempt in 1 2 3; do
               echo "[preview nichos V2] ${label}, intento ${attempt} de 3"
-              if timeout --kill-after=30s "${timeout_seconds}s" lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_URL" -e "
+              if timeout --kill-after=15s "${timeout_seconds}s" lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_URL" -e "
                 set cmd:fail-exit yes;
                 set ftp:passive-mode true;
                 set ftp:ssl-force true;
@@ -156,10 +156,10 @@ jobs:
                 set ftp:sync-mode true;
                 set ssl:verify-certificate yes;
                 set ssl:check-hostname yes;
-                set net:timeout 60;
-                set net:max-retries 3;
-                set net:reconnect-interval-base 10;
-                set net:reconnect-interval-max 30;
+                set net:timeout 30;
+                set net:max-retries 1;
+                set net:reconnect-interval-base 5;
+                set net:reconnect-interval-max 10;
                 set xfer:clobber yes;
                 ${commands}
                 bye;
@@ -169,8 +169,8 @@ jobs:
               fi
 
               if [ "$attempt" -lt 3 ]; then
-                echo "[preview nichos V2] ${label} fallo. Reintento en 20 segundos..."
-                sleep 20
+                echo "[preview nichos V2] ${label} fallo. Reintento en 15 segundos..."
+                sleep 15
               fi
             done
 
@@ -178,17 +178,21 @@ jobs:
             return 1
           }
 
-          run_lftp 'preparar carpetas remotas' "
-            set cmd:fail-exit no;
-            mkdir -p '${REMOTE_DIR}';
-            set cmd:fail-exit yes;
+          run_lftp 'verificar acceso remoto' "
+            cd '${REMOTE_DIR}';
+            pwd;
+            cls -1;
+          " 120
+
+          run_lftp 'preparar subcarpetas remotas' "
             cd '${REMOTE_DIR}';
             set cmd:fail-exit no;
-            mkdir -p data;
-            mkdir -p assets;
-            mkdir -p vendor;
+            mkdir data;
+            mkdir assets;
+            mkdir vendor;
             set cmd:fail-exit yes;
-          " 300
+            pwd;
+          " 120
 
           run_lftp 'publicar archivos base' "
             cd '${REMOTE_DIR}';
@@ -200,7 +204,7 @@ jobs:
             put 'deploy/nichos-v2-preview.css' -o 'nichos-v2-preview.css';
             put 'deploy/nichos-v2-map-integration.js' -o 'nichos-v2-map-integration.js';
             put 'deploy/vendor/msal-browser.min.js' -o 'vendor/msal-browser.min.js';
-          " 600
+          " 300
 
           run_lftp 'publicar datos geojson' "
             cd '${REMOTE_DIR}';
@@ -209,7 +213,7 @@ jobs:
             put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
             put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
             put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
-          " 900
+          " 300
 
           publish_asset() {
             local local_path="$1"
