@@ -1,0 +1,104 @@
+name: Publicar hotfix tooltips Nichos V2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-nichos-tooltip-hotfix.yml'
+      - 'tools/apply_nichos_v2_production.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-mapa-independiente
+  cancel-in-progress: false
+
+jobs:
+  deploy-hotfix:
+    name: Publicar correccion de hover en Nichos V2
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Preparar PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Preparar dependencias
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow
+          rm -rf .tmp-msal
+          npm install --prefix .tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
+
+      - name: Construir Mapa de produccion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/build_portal_map.py
+          python3 tools/apply_nichos_v2_production.py
+          mkdir -p deploy/vendor
+          cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
+          node --check deploy/nichos-v2-preview.js
+          php -l deploy/index.php
+          grep -q 'nichos-v2-preview.js?v=15' deploy/index.php
+          grep -q 'function clearNicheHoverTooltip' deploy/nichos-v2-preview.js
+          grep -q 'nv2-niche-hover-tooltip' deploy/nichos-v2-preview.js
+          grep -q 'activeNicheHoverLayer' deploy/nichos-v2-preview.js
+
+      - name: Instalar cliente FTPS
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lftp
+
+      - name: Publicar solo hotfix de Nichos V2
+        shell: bash
+        env:
+          FTP_SERVER: whm95.mxwebserver.com
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_USERNAME"
+          test -n "$FTP_PASSWORD"
+
+          for attempt in 1 2 3; do
+            echo "[Nichos tooltip hotfix] intento ${attempt} de 3"
+
+            if timeout --kill-after=10s 180s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://${FTP_SERVER}:21" -e "
+              set cmd:fail-exit yes;
+              set ftp:passive-mode true;
+              set ftp:ssl-force true;
+              set ftp:ssl-protect-data true;
+              set ftp:ssl-auth TLS;
+              set ftp:sync-mode false;
+              set ssl:verify-certificate yes;
+              set ssl:check-hostname yes;
+              set net:timeout 30;
+              set net:max-retries 1;
+              lcd deploy;
+              put index.php -o index.php;
+              put nichos-v2-preview.js -o nichos-v2-preview.js;
+              bye;
+            "; then
+              echo '[Nichos tooltip hotfix] publicacion completada correctamente.'
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              sleep 12
+            fi
+          done
+
+          echo '[Nichos tooltip hotfix] ERROR: no fue posible publicar el hotfix.'
+          exit 1
