@@ -1,0 +1,1 @@
+Recursos locales para el preview Nichos V2. Las imagenes se reconstruyen en el workflow desde archivos fuente versionados.

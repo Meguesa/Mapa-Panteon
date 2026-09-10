@@ -2,6 +2,18 @@ name: Publicar preview Nichos V2
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - preview/nichos-v2-sabbathycal
+    paths:
+      - '.github/workflows/deploy-nichos-v2-preview.yml'
+      - 'tools/build_nichos_v2_preview.py'
+      - 'tools/apply_nichos_v2_v11.py'
+      - 'tools/apply_nichos_v2_png_v12.py'
+      - 'nichos-v2-preview.js'
+      - 'nichos-v2-preview.css'
+      - 'nichos-v2-map-integration.js'
+      - 'assets/nichos-v2-src/**'
 
 permissions:
   contents: read
@@ -14,11 +26,11 @@ jobs:
   deploy-preview:
     name: Construir y publicar preview de Nichos V2
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
 
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Preparar PHP 8.2
         uses: shivammathur/setup-php@v2
@@ -38,54 +50,79 @@ jobs:
           rm -rf .tmp-msal
           npm install --prefix .tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
 
-      - name: Construir preview aislado
+      - name: Construir preview aislado v14
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m py_compile \
+            tools/build_nichos_v2_preview.py \
+            tools/apply_nichos_v2_v11.py \
+            tools/apply_nichos_v2_png_v12.py
           python3 tools/build_nichos_v2_preview.py
+          python3 tools/apply_nichos_v2_png_v12.py
           mkdir -p deploy/vendor
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
           rm -rf .tmp-msal
 
-      - name: Validar preview
+      - name: Validar preview v14
         shell: bash
         run: |
           set -euo pipefail
           test -s deploy/index.php
           test -s deploy/app.js
           test -s deploy/styles.css
+          test -s deploy/sharepoint-inventario.js
           test -s deploy/nichos-v2-preview.js
           test -s deploy/nichos-v2-preview.css
-          test -s deploy/assets/map/base-public.webp
+          test -s deploy/nichos-v2-map-integration.js
           test -s deploy/assets/PLN-concavo.png
           test -s deploy/assets/PLN-convexo.png
           test -s deploy/assets/SPN-concavo.png
+          test -s deploy/assets/SPN-convexo.png
+          test -s deploy/vendor/msal-browser.min.js
           test -s deploy/data/PLN-concavo.geojson
           test -s deploy/data/PLN-convexo.geojson
           test -s deploy/data/SPN-concavo.geojson
+          test -s deploy/data/SPN-convexo.geojson
           test -s deploy/data/nichos-zonas.geojson
-          test -s deploy/data/inventario-base.json
-          test -s deploy/vendor/msal-browser.min.js
+
           php -l deploy/index.php
-          grep -q 'nichos-v2-preview.css' deploy/index.php
-          grep -q 'nichos-v2-preview.js' deploy/index.php
+          node --check deploy/nichos-v2-preview.js
+          grep -q 'nichos-v2-preview.css?v=14' deploy/index.php
+          grep -q 'nichos-v2-preview.js?v=14' deploy/index.php
+          grep -q 'nichos-v2-map-integration.js?v=14' deploy/index.php
           grep -q 'dirname(__DIR__, 2)' deploy/index.php
+          grep -q 'SPN-convexo.png?v=14' deploy/nichos-v2-preview.js
+          grep -q 'state.nichesVisible = !state.nichesVisible' deploy/nichos-v2-preview.js
+          grep -q 'function renderVectorLabels' deploy/nichos-v2-preview.js
+          grep -q 'nv2LabelsPane' deploy/nichos-v2-preview.js
+          grep -q 'nv2-niche-label-bg' deploy/nichos-v2-preview.js
+          grep -q 'const normalizedWidth = 2048' deploy/nichos-v2-preview.js
+          grep -q 'function fitWholeImage' deploy/nichos-v2-preview.js
+          grep -q "block !== 'JP'" deploy/nichos-v2-preview.js
+          grep -q 'JP_ALLOW_INTERACTIVE_INVENTORY_AUTH' deploy/nichos-v2-preview.js
 
           python3 - <<'PY'
           import json
           from pathlib import Path
 
-          for name in [
-              'PLN-concavo.geojson',
-              'PLN-convexo.geojson',
-              'SPN-concavo.geojson',
-          ]:
+          expected = {
+              'PLN-concavo.geojson': 402,
+              'PLN-convexo.geojson': 474,
+              'SPN-concavo.geojson': 306,
+              'SPN-convexo.geojson': 360,
+          }
+
+          for name, expected_count in expected.items():
               path = Path('deploy/data') / name
               with path.open('r', encoding='utf-8') as fh:
                   data = json.load(fh)
-              if data.get('type') != 'FeatureCollection' or not data.get('features'):
-                  raise SystemExit(f'GeoJSON V2 inválido o vacío: {path}')
-              print(f'{name}: {len(data["features"])} nichos')
+              if data.get('type') != 'FeatureCollection':
+                  raise SystemExit(f'GeoJSON V2 invalido: {path}')
+              actual = len(data.get('features', []))
+              if actual != expected_count:
+                  raise SystemExit(f'Conteo invalido en {path}: {actual} != {expected_count}')
+              print(f'{name}: {actual} nichos')
           PY
 
       - name: Instalar cliente FTPS
@@ -94,42 +131,107 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lftp
 
-      - name: Publicar en carpeta aislada de cPanel
+      - name: Publicar actualizacion incremental en cPanel
         shell: bash
+        timeout-minutes: 45
         env:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           set -euo pipefail
+          REMOTE_DIR='preview-nichos-v2'
+          FTP_URL='ftp://whm95.mxwebserver.com:21'
 
-          REMOTE_DIR="preview-nichos-v2"
+          run_lftp() {
+            local label="$1"
+            local commands="$2"
+            local timeout_seconds="${3:-300}"
 
-          for attempt in 1 2 3; do
-            echo "[preview nichos V2] intento ${attempt} de 3"
+            for attempt in 1 2 3; do
+              echo "[preview nichos V2] ${label}, intento ${attempt} de 3"
+              if timeout --kill-after=15s "${timeout_seconds}s" lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_URL" -e "
+                set cmd:fail-exit yes;
+                set ftp:passive-mode true;
+                set ftp:ssl-force true;
+                set ftp:ssl-protect-data true;
+                set ftp:ssl-auth TLS;
+                set ftp:sync-mode true;
+                set ssl:verify-certificate yes;
+                set ssl:check-hostname yes;
+                set net:timeout 30;
+                set net:max-retries 1;
+                set net:reconnect-interval-base 5;
+                set net:reconnect-interval-max 10;
+                set xfer:clobber yes;
+                ${commands}
+                bye;
+              "; then
+                echo "[preview nichos V2] ${label} completado"
+                return 0
+              fi
 
-            if timeout --kill-after=15s 420s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
-              set cmd:fail-exit yes;
-              set ftp:passive-mode true;
-              set ftp:ssl-force true;
-              set ftp:ssl-protect-data true;
-              set ftp:ssl-auth TLS;
-              set ssl:verify-certificate yes;
-              set ssl:check-hostname yes;
-              set net:timeout 30;
-              set net:max-retries 1;
-              mkdir -p '$REMOTE_DIR';
-              mirror -R --verbose=1 --parallel=2 --exclude-glob '.git*' --exclude-glob 'assets/nichos/**' deploy/ '$REMOTE_DIR'/;
-              bye;
-            "; then
-              echo "Preview publicado correctamente en /mapa/$REMOTE_DIR/"
-              exit 0
-            fi
+              if [ "$attempt" -lt 3 ]; then
+                echo "[preview nichos V2] ${label} fallo. Reintento en 15 segundos..."
+                sleep 15
+              fi
+            done
 
-            if [ "$attempt" -lt 3 ]; then
-              echo "Transferencia fallida. Reintento en 15 segundos..."
-              sleep 15
-            fi
-          done
+            echo "ERROR: no fue posible completar: ${label}"
+            return 1
+          }
 
-          echo "ERROR: no fue posible publicar el preview después de 3 intentos."
-          exit 1
+          run_lftp 'verificar acceso remoto' "
+            cd '${REMOTE_DIR}';
+            pwd;
+            cls -1;
+          " 120
+
+          run_lftp 'preparar subcarpetas remotas' "
+            cd '${REMOTE_DIR}';
+            set cmd:fail-exit no;
+            mkdir data;
+            mkdir assets;
+            mkdir vendor;
+            set cmd:fail-exit yes;
+            pwd;
+          " 120
+
+          run_lftp 'publicar archivos base' "
+            cd '${REMOTE_DIR}';
+            put 'deploy/index.php' -o 'index.php';
+            put 'deploy/app.js' -o 'app.js';
+            put 'deploy/styles.css' -o 'styles.css';
+            put 'deploy/sharepoint-inventario.js' -o 'sharepoint-inventario.js';
+            put 'deploy/nichos-v2-preview.js' -o 'nichos-v2-preview.js';
+            put 'deploy/nichos-v2-preview.css' -o 'nichos-v2-preview.css';
+            put 'deploy/nichos-v2-map-integration.js' -o 'nichos-v2-map-integration.js';
+            put 'deploy/vendor/msal-browser.min.js' -o 'vendor/msal-browser.min.js';
+          " 300
+
+          run_lftp 'publicar datos geojson' "
+            cd '${REMOTE_DIR}';
+            put 'deploy/data/nichos-zonas.geojson' -o 'data/nichos-zonas.geojson';
+            put 'deploy/data/PLN-concavo.geojson' -o 'data/PLN-concavo.geojson';
+            put 'deploy/data/SPN-concavo.geojson' -o 'data/SPN-concavo.geojson';
+            put 'deploy/data/PLN-convexo.geojson' -o 'data/PLN-convexo.geojson';
+            put 'deploy/data/SPN-convexo.geojson' -o 'data/SPN-convexo.geojson';
+          " 300
+
+          publish_asset() {
+            local local_path="$1"
+            local remote_path="$2"
+            local label="$3"
+            run_lftp "publicar asset ${label}" "
+              cd '${REMOTE_DIR}';
+              put -c '${local_path}' -o '${remote_path}.tmp';
+              rm -f '${remote_path}';
+              mv '${remote_path}.tmp' '${remote_path}';
+            " 1200
+          }
+
+          publish_asset 'deploy/assets/PLN-concavo.png' 'assets/PLN-concavo.png' 'PLN-concavo.png'
+          publish_asset 'deploy/assets/PLN-convexo.png' 'assets/PLN-convexo.png' 'PLN-convexo.png'
+          publish_asset 'deploy/assets/SPN-concavo.png' 'assets/SPN-concavo.png' 'SPN-concavo.png'
+          publish_asset 'deploy/assets/SPN-convexo.png' 'assets/SPN-convexo.png' 'SPN-convexo.png'
+
+          echo "Preview Nichos V2 v14 actualizado correctamente en /mapa/${REMOTE_DIR}/"
