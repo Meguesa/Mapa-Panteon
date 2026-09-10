@@ -7,7 +7,7 @@ import build_nichos_v2_preview as builder
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy"
-CACHE_VERSION = "13"
+CACHE_VERSION = "14"
 
 
 def replace_required(source: str, old: str, new: str, label: str) -> str:
@@ -16,25 +16,45 @@ def replace_required(source: str, old: str, new: str, label: str) -> str:
     return source.replace(old, new, 1)
 
 
-def regenerate_geometry_for_new_images() -> None:
-    """Regenera la cuadricula en el sistema normalizado de 2048 px de ancho.
+def transform_anchors(anchors: dict[int, float], scale: float = 1.0, offset: float = 0.0,
+                      keep_first: bool = False, post_first_offset: float | None = None) -> dict[int, float]:
+    out: dict[int, float] = {}
+    first_key = min(anchors)
+    for key, value in anchors.items():
+        if keep_first and key == first_key:
+            out[key] = float(value)
+            continue
+        if post_first_offset is not None and key != first_key:
+            out[key] = round(float(value) + post_first_offset, 6)
+            continue
+        out[key] = round(float(value) * scale + offset, 6)
+    return out
 
-    Las nuevas fotografias conservan el ancho logico de 2048 px, pero tienen
-    alturas distintas a las versiones anteriores. Los limites verticales se
-    midieron sobre las imagenes nuevas.
+
+def regenerate_geometry_for_new_images() -> None:
+    """Regenera la cuadricula usando las imagenes nuevas y microajustes medidos
+    contra los centros de los marcadores circulares visibles en cada fotografia.
     """
     updates = {
         "PLN-concavo": {
             "height": 213,
             "y_edges": [27.0, 55.0, 82.0, 110.0, 139.0, 165.0, 194.0],
+            # En la imagen nueva los separadores reales quedan ~1.5 px logicos
+            # a la derecha de la geometria anterior.
+            "x_transform": (1.0, 1.5),
         },
         "PLN-convexo": {
             "height": 183,
             "y_edges": [22.0, 46.0, 70.0, 94.0, 118.0, 142.0, 164.0],
+            # Desplazamiento horizontal uniforme observado en la vista ampliada.
+            "x_transform": (1.0, 3.6),
         },
         "SPN-concavo": {
             "height": 273,
             "y_edges": [31.0, 67.0, 103.0, 139.0, 177.0, 212.0, 250.0],
+            # Aqui el desfase no era solo traslacion: se acumulaba ligeramente
+            # de izquierda a derecha, por eso se corrige escala y origen.
+            "x_transform": (1.0167, -8.15),
         },
     }
 
@@ -42,17 +62,21 @@ def regenerate_geometry_for_new_images() -> None:
         spec = builder.STANDARD_GRIDS[name]
         spec["height"] = values["height"]
         spec["y_edges"] = values["y_edges"]
+        scale, offset = values["x_transform"]
+        spec["x_anchors"] = transform_anchors(spec["x_anchors"], scale=scale, offset=offset)
         builder.write_geojson(name, builder.generate_standard_grid(spec))
 
     builder.SPN_CONVEXO["height"] = 236
     builder.SPN_CONVEXO["y_edges"] = [28.0, 58.0, 88.0, 119.0, 150.0, 181.0, 214.0]
+    # El primer separador ya coincide; los siguientes estaban ~2.3 px logicos
+    # a la derecha respecto a los marcadores de la fotografia.
+    builder.SPN_CONVEXO["x_anchors"] = transform_anchors(
+        builder.SPN_CONVEXO["x_anchors"], keep_first=True, post_first_offset=-2.3
+    )
     builder.write_geojson("SPN-convexo", builder.generate_spn_convexo())
 
 
 def apply_v11_functionality_without_external_assets() -> None:
-    # Las fotografias ya son generadas por build_nichos_v2_preview.py desde
-    # assets/nichos-v2-src. Dejamos vacia la lista para que el parche V11
-    # aplique filtros y etiquetas SVG sin buscar los WebP base64 inexistentes.
     v11.ASSET_NAMES = ()
     v11.patch_runtime()
     v11.patch_styles()
@@ -70,10 +94,7 @@ def patch_normalized_image_bounds_and_initial_fit(runtime: str) -> str:
       state.map.setMaxBounds(bounds);
       state.map.fitBounds(bounds, { animate: false, padding: [20, 20] });"""
 
-    new_bounds = """      // La geometria V2 usa un lienzo normalizado de 2048 px de ancho.
-      // Las imagenes fuente pueden estar en resolucion mucho mayor; usar sus
-      // pixeles naturales como coordenadas separaria la imagen del GeoJSON.
-      const normalizedWidth = 2048;
+    new_bounds = """      const normalizedWidth = 2048;
       const normalizedHeight = dimensions.height * (normalizedWidth / dimensions.width);
       const bounds = [
         [0, 0],
@@ -104,8 +125,6 @@ def patch_normalized_image_bounds_and_initial_fit(runtime: str) -> str:
       });
     };
 
-    // El modal cambia de tamano al abrirse. Ajustamos despues del layout para
-    // evitar que Leaflet calcule el zoom con las dimensiones previas/ocultas.
     requestAnimationFrame(() => requestAnimationFrame(applyFit));
     window.setTimeout(applyFit, 120);
   }
@@ -156,7 +175,6 @@ def add_label_backing_and_bump_cache() -> None:
 
     runtime = patch_normalized_image_bounds_and_initial_fit(runtime)
 
-    # Cache bust para imagenes y recursos del preview.
     for name in ("PLN-concavo", "PLN-convexo", "SPN-concavo", "SPN-convexo"):
         runtime = runtime.replace(
             f"/assets/{name}.png`",
@@ -187,8 +205,8 @@ def add_label_backing_and_bump_cache() -> None:
         "nichos-v2-preview.js",
         "nichos-v2-map-integration.js",
     ):
-        index = index.replace(f"{asset}?v=11", f"{asset}?v={CACHE_VERSION}")
-        index = index.replace(f"{asset}?v=12", f"{asset}?v={CACHE_VERSION}")
+        for old_version in ("11", "12", "13"):
+            index = index.replace(f"{asset}?v={old_version}", f"{asset}?v={CACHE_VERSION}")
     index_path.write_text(index, encoding="utf-8")
 
 
@@ -219,7 +237,7 @@ def main() -> None:
     apply_v11_functionality_without_external_assets()
     add_label_backing_and_bump_cache()
     validate()
-    print("Nichos V2 v13 preparado: geometria recalibrada, imagen normalizada y vista completa inicial.")
+    print("Nichos V2 v14 preparado: microajustes horizontales aplicados a las cuatro vistas.")
 
 
 if __name__ == "__main__":
