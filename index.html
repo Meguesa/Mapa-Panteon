@@ -124,9 +124,6 @@
       input{ min-width: 180px; }
     }
 
-    /* =========================
-       TOAST
-       ========================= */
     #toast{
       position: fixed;
       left: 50%;
@@ -143,14 +140,11 @@
       box-shadow: 0 10px 30px rgba(0,0,0,.18);
     }
 
-    /* =========================
-       MODAL NICHOS
-       ========================= */
     #nichoModal{
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,.45);
-      display: none;           /* flex when open */
+      display: none;
       align-items: center;
       justify-content: center;
       z-index: 9999;
@@ -202,7 +196,6 @@
       overflow: hidden;
     }
 
-    /* viewport con scroll */
     #nichoImageWrap{
       position: absolute;
       inset: 0;
@@ -210,7 +203,6 @@
       background: #f8fafc;
     }
 
-    /* elemento escalable */
     #nichoScale{
       position: relative;
       transform-origin: top left;
@@ -223,7 +215,6 @@
       -webkit-user-drag: none;
     }
 
-    /* overlay clicks (misma caja que la imagen) */
     #nichoClickLayer{
       position: absolute;
       inset: 0;
@@ -307,10 +298,8 @@
     </aside>
   </main>
 
-  <!-- TOAST -->
   <div id="toast"></div>
 
-  <!-- MODAL NICHOS -->
   <div id="nichoModal">
     <div class="nichoCard">
       <div class="nichoTop">
@@ -358,13 +347,9 @@
     </div>
   </div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Microsoft Authentication Library -->
   <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
-  
-  <!-- Respaldo oficial de MSAL en otra región de Microsoft -->
   <script>
     if (typeof window.msal === "undefined") {
       document.write(
@@ -372,11 +357,9 @@
       );
     }
   </script>
-  
-  <!-- Inventario dinámico desde SharePoint -->
-  <script src="./sharepoint-inventario.js?v=20260806a"></script>
-    
-  <!-- toast helper -->
+
+  <script src="./src/js/sharepoint-inventario.js?v=20260806a"></script>
+
   <script>
     window.toast = function (msg, ms) {
       var el = document.getElementById("toast");
@@ -390,7 +373,6 @@
     };
   </script>
 
-  <!-- Loader anti-cache para app.js + ajustes públicos -->
   <script>
     (function () {
       window.APP_VERSION = String(Date.now());
@@ -400,7 +382,7 @@
 
       s.onload = function () {
         var fixes = document.createElement("script");
-        fixes.src = "./public-ui-fixes.js?v=" + encodeURIComponent(window.APP_VERSION);
+        fixes.src = "./src/js/public-ui-fixes.js?v=" + encodeURIComponent(window.APP_VERSION);
         document.body.appendChild(fixes);
       };
 
@@ -414,10 +396,8 @@
     })();
   </script>
 
-  <!-- Referencias visuales de secciones -->
-  <script src="./section-visual-references.js?v=20260903a"></script>
+  <script src="./src/js/section-visual-references.js?v=20260903a"></script>
 
-  <!-- Nichos Modal (fullscreen sobre el mapa) -->
   <div id="nichosModal" class="nm-backdrop" style="display:none;position:fixed;inset:0;z-index:9999;">
     <div class="nm-card">
       <div class="nm-header">
