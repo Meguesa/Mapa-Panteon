@@ -244,7 +244,10 @@
     const catalogItem = getCatalogoItemForLoteFeature(feature);
     const referencia = inv?.referencia_procap || catalogItem?.referencia_procap || `${sec} - ${String(loteVal).padStart(3, '0')} - ${man}`;
     const construido = inv?.esta_construido === true ? 'Sí' : inv?.esta_construido === false ? 'No' : '-';
-    const usosInhum = Number(inv?.usos_inhumaciones ?? inv?.inhumaciones ?? 0);
+
+    // SharePoint expone este dato como uso_inhumacion. Se conservan los alias
+    // anteriores como respaldo para inventarios historicos/fallback JSON.
+    const usosInhum = Number(inv?.uso_inhumacion ?? inv?.usos_inhumaciones ?? inv?.inhumaciones ?? 0);
     const capInhum = Number(inv?.capacidad_inhumaciones ?? inv?.capacidad_inhumacion ?? 4);
     const usosCen = Number(inv?.usos_cenizas ?? 0);
     const capCen = Number(inv?.capacidad_cenizas ?? 4);
