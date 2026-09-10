@@ -3,15 +3,50 @@ from __future__ import annotations
 from pathlib import Path
 
 import apply_nichos_v2_v11 as v11
+import build_nichos_v2_preview as builder
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy"
+CACHE_VERSION = "13"
 
 
 def replace_required(source: str, old: str, new: str, label: str) -> str:
     if old not in source:
         raise RuntimeError(f"No se encontro el bloque esperado: {label}")
     return source.replace(old, new, 1)
+
+
+def regenerate_geometry_for_new_images() -> None:
+    """Regenera la cuadricula en el sistema normalizado de 2048 px de ancho.
+
+    Las nuevas fotografias conservan el ancho logico de 2048 px, pero tienen
+    alturas distintas a las versiones anteriores. Los limites verticales se
+    midieron sobre las imagenes nuevas.
+    """
+    updates = {
+        "PLN-concavo": {
+            "height": 213,
+            "y_edges": [27.0, 55.0, 82.0, 110.0, 139.0, 165.0, 194.0],
+        },
+        "PLN-convexo": {
+            "height": 183,
+            "y_edges": [22.0, 46.0, 70.0, 94.0, 118.0, 142.0, 164.0],
+        },
+        "SPN-concavo": {
+            "height": 273,
+            "y_edges": [31.0, 67.0, 103.0, 139.0, 177.0, 212.0, 250.0],
+        },
+    }
+
+    for name, values in updates.items():
+        spec = builder.STANDARD_GRIDS[name]
+        spec["height"] = values["height"]
+        spec["y_edges"] = values["y_edges"]
+        builder.write_geojson(name, builder.generate_standard_grid(spec))
+
+    builder.SPN_CONVEXO["height"] = 236
+    builder.SPN_CONVEXO["y_edges"] = [28.0, 58.0, 88.0, 119.0, 150.0, 181.0, 214.0]
+    builder.write_geojson("SPN-convexo", builder.generate_spn_convexo())
 
 
 def apply_v11_functionality_without_external_assets() -> None:
@@ -22,6 +57,75 @@ def apply_v11_functionality_without_external_assets() -> None:
     v11.patch_runtime()
     v11.patch_styles()
     v11.bump_asset_version()
+
+
+def patch_normalized_image_bounds_and_initial_fit(runtime: str) -> str:
+    old_bounds = """      const bounds = [
+        [0, 0],
+        [dimensions.height, dimensions.width],
+      ];
+      state.imageBounds = bounds;
+
+      state.imageLayer = L.imageOverlay(config.image, bounds).addTo(state.map);
+      state.map.setMaxBounds(bounds);
+      state.map.fitBounds(bounds, { animate: false, padding: [20, 20] });"""
+
+    new_bounds = """      // La geometria V2 usa un lienzo normalizado de 2048 px de ancho.
+      // Las imagenes fuente pueden estar en resolucion mucho mayor; usar sus
+      // pixeles naturales como coordenadas separaria la imagen del GeoJSON.
+      const normalizedWidth = 2048;
+      const normalizedHeight = dimensions.height * (normalizedWidth / dimensions.width);
+      const bounds = [
+        [0, 0],
+        [normalizedHeight, normalizedWidth],
+      ];
+      state.imageBounds = bounds;
+
+      state.imageLayer = L.imageOverlay(config.image, bounds).addTo(state.map);
+      state.map.setMaxBounds(bounds, { padding: [0.08, 0.08] });
+      fitWholeImage(false);"""
+
+    runtime = replace_required(runtime, old_bounds, new_bounds, "bounds normalizados de imagen")
+
+    old_recenter = """  function recenter() {
+    if (!state.map) return;
+
+    if (state.selectedFeature && state.nicheLayer) {"""
+
+    new_recenter = """  function fitWholeImage(animate = false) {
+    if (!state.map || !state.imageBounds) return;
+
+    const applyFit = () => {
+      if (!state.map || !state.imageBounds) return;
+      state.map.invalidateSize(false);
+      state.map.fitBounds(state.imageBounds, {
+        animate,
+        padding: [12, 12],
+      });
+    };
+
+    // El modal cambia de tamano al abrirse. Ajustamos despues del layout para
+    // evitar que Leaflet calcule el zoom con las dimensiones previas/ocultas.
+    requestAnimationFrame(() => requestAnimationFrame(applyFit));
+    window.setTimeout(applyFit, 120);
+  }
+
+  function recenter() {
+    if (!state.map) return;
+
+    if (state.selectedFeature && state.nicheLayer) {"""
+
+    runtime = replace_required(runtime, old_recenter, new_recenter, "funcion fitWholeImage")
+
+    old_final_fit = """    if (state.imageBounds) {
+      state.map.fitBounds(state.imageBounds, { animate: true, padding: [20, 20] });
+    }"""
+    new_final_fit = """    if (state.imageBounds) {
+      fitWholeImage(true);
+    }"""
+    runtime = replace_required(runtime, old_final_fit, new_final_fit, "recentrado de imagen completa")
+
+    return runtime
 
 
 def add_label_backing_and_bump_cache() -> None:
@@ -50,11 +154,13 @@ def add_label_backing_and_bump_cache() -> None:
     if "nv2-niche-label-bg" not in runtime:
         runtime = replace_required(runtime, old, new, "fondo de etiqueta SVG")
 
-    # Cache bust para las imagenes PNG existentes y los recursos del preview.
+    runtime = patch_normalized_image_bounds_and_initial_fit(runtime)
+
+    # Cache bust para imagenes y recursos del preview.
     for name in ("PLN-concavo", "PLN-convexo", "SPN-concavo", "SPN-convexo"):
         runtime = runtime.replace(
             f"/assets/{name}.png`",
-            f"/assets/{name}.png?v=12`",
+            f"/assets/{name}.png?v={CACHE_VERSION}`",
         )
 
     runtime_path.write_text(runtime, encoding="utf-8")
@@ -76,12 +182,13 @@ def add_label_backing_and_bump_cache() -> None:
 
     index_path = DEPLOY / "index.php"
     index = index_path.read_text(encoding="utf-8")
-    for old_version, new_version in (
-        ("nichos-v2-preview.css?v=11", "nichos-v2-preview.css?v=12"),
-        ("nichos-v2-preview.js?v=11", "nichos-v2-preview.js?v=12"),
-        ("nichos-v2-map-integration.js?v=11", "nichos-v2-map-integration.js?v=12"),
+    for asset in (
+        "nichos-v2-preview.css",
+        "nichos-v2-preview.js",
+        "nichos-v2-map-integration.js",
     ):
-        index = replace_required(index, old_version, new_version, old_version)
+        index = index.replace(f"{asset}?v=11", f"{asset}?v={CACHE_VERSION}")
+        index = index.replace(f"{asset}?v=12", f"{asset}?v={CACHE_VERSION}")
     index_path.write_text(index, encoding="utf-8")
 
 
@@ -93,7 +200,9 @@ def validate() -> None:
         "function renderVectorLabels",
         "nv2LabelsPane",
         "nv2-niche-label-bg",
-        "SPN-convexo.png?v=12",
+        f"SPN-convexo.png?v={CACHE_VERSION}",
+        "const normalizedWidth = 2048",
+        "function fitWholeImage",
     )
     for marker in required:
         if marker not in runtime:
@@ -106,10 +215,11 @@ def validate() -> None:
 
 
 def main() -> None:
+    regenerate_geometry_for_new_images()
     apply_v11_functionality_without_external_assets()
     add_label_backing_and_bump_cache()
     validate()
-    print("Nichos V2 v12 preparado con PNG locales, alternancia Todos y etiquetas SVG.")
+    print("Nichos V2 v13 preparado: geometria recalibrada, imagen normalizada y vista completa inicial.")
 
 
 if __name__ == "__main__":
