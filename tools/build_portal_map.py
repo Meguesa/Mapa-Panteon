@@ -117,6 +117,7 @@ def copy_files() -> None:
         ROOT / "portal-integration.css",
         ROOT / "account-menu.css",
         ROOT / "mapa-enhancements.js",
+        ROOT / "lotes-nv2-match.js",
         ROOT / "assets/map/base-public.webp",
         ROOT / "assets/logo.jpg",
         ROOT / "assets/americano-01.webp",
@@ -147,6 +148,7 @@ def copy_files() -> None:
         "portal-integration.css",
         "account-menu.css",
         "mapa-enhancements.js",
+        "lotes-nv2-match.js",
     ]:
         shutil.copy2(ROOT / name, TARGET_DIR / name)
 
@@ -287,8 +289,10 @@ def build_index() -> None:
     source = require_replace(
         source,
         "</body>",
-        '  <script src="./mapa-enhancements.js?v=20260822a"></script>\n</body>',
-        "mejoras de navegacion y ficha del Mapa",
+        '  <script src="./mapa-enhancements.js?v=20260822a"></script>\n'
+        '  <script src="./lotes-nv2-match.js?v=1"></script>\n'
+        '</body>',
+        "mejoras de navegacion, ficha y formato de lotes",
     )
 
     php = '''<?php
