@@ -4,6 +4,8 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET_DIR = ROOT / "deploy"
+SRC_JS = ROOT / "src" / "js"
+SRC_CSS = ROOT / "src" / "css"
 
 PORTAL_OVERLAY_HEIGHT = "calc(100vh - var(--portal-map-total-header-height, 144px))"
 
@@ -111,13 +113,13 @@ def copy_files() -> None:
         ROOT / "app.js",
         ROOT / "styles.css",
         ROOT / "index.html",
-        ROOT / "sharepoint-inventario.js",
-        ROOT / "public-ui-fixes.js",
-        ROOT / "section-visual-references.js",
-        ROOT / "portal-integration.css",
-        ROOT / "account-menu.css",
-        ROOT / "mapa-enhancements.js",
-        ROOT / "lotes-nv2-match.js",
+        SRC_JS / "sharepoint-inventario.js",
+        SRC_JS / "public-ui-fixes.js",
+        SRC_JS / "section-visual-references.js",
+        SRC_CSS / "portal-integration.css",
+        SRC_CSS / "account-menu.css",
+        SRC_JS / "mapa-enhancements.js",
+        SRC_JS / "lotes-nv2-match.js",
         ROOT / "assets/map/base-public.webp",
         ROOT / "assets/logo.jpg",
         ROOT / "assets/americano-01.webp",
@@ -140,17 +142,18 @@ def copy_files() -> None:
 
     build_app_js()
 
-    for name in [
-        "styles.css",
-        "sharepoint-inventario.js",
-        "public-ui-fixes.js",
-        "section-visual-references.js",
-        "portal-integration.css",
-        "account-menu.css",
-        "mapa-enhancements.js",
-        "lotes-nv2-match.js",
-    ]:
-        shutil.copy2(ROOT / name, TARGET_DIR / name)
+    flat_sources = {
+        SRC_JS / "sharepoint-inventario.js": "sharepoint-inventario.js",
+        SRC_JS / "public-ui-fixes.js": "public-ui-fixes.js",
+        SRC_JS / "section-visual-references.js": "section-visual-references.js",
+        SRC_CSS / "portal-integration.css": "portal-integration.css",
+        SRC_CSS / "account-menu.css": "account-menu.css",
+        SRC_JS / "mapa-enhancements.js": "mapa-enhancements.js",
+        SRC_JS / "lotes-nv2-match.js": "lotes-nv2-match.js",
+    }
+    shutil.copy2(ROOT / "styles.css", TARGET_DIR / "styles.css")
+    for source_path, target_name in flat_sources.items():
+        shutil.copy2(source_path, TARGET_DIR / target_name)
 
     assets_dir = TARGET_DIR / "assets"
     (assets_dir / "map").mkdir(parents=True, exist_ok=True)
@@ -172,6 +175,15 @@ def copy_files() -> None:
 
 def build_index() -> None:
     source = (ROOT / "index.html").read_text(encoding="utf-8")
+
+    # La fuente del repositorio vive en src/, pero el paquete de cPanel mantiene
+    # nombres planos para no cambiar URLs productivas ya publicadas.
+    for source_ref, deploy_ref in {
+        "./src/js/sharepoint-inventario.js": "./sharepoint-inventario.js",
+        "./src/js/public-ui-fixes.js": "./public-ui-fixes.js",
+        "./src/js/section-visual-references.js": "./section-visual-references.js",
+    }.items():
+        source = source.replace(source_ref, deploy_ref)
 
     msal_pattern = re.compile(
         r'\s*<!-- Microsoft Authentication Library -->\s*'
