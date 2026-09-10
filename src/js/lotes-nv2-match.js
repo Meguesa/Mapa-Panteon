@@ -12,6 +12,7 @@
     desconocido: { label: 'Sin estado', color: '#a0aec0' },
   };
 
+  const LOT_LABEL_STYLE_ID = 'lot-nv2-number-label-style';
   let lastManzanaKey = '';
 
   function statusMeta(status) {
@@ -29,6 +30,55 @@
     }
   }
 
+  function lotLabelText(feature) {
+    const props = feature?.properties || {};
+    const raw = props.lote ?? props.codigo ?? props.name ?? props.nombre ?? props.id ?? '';
+    const text = String(raw || '').trim();
+    if (!text) return '';
+
+    // Si el GeoJSON trae un ID largo, intentar mostrar solamente el codigo del lote.
+    const lotMatch = text.match(/(?:LOTE[-_\s]*)?0*(\d+)$/i);
+    if (lotMatch) return String(Number(lotMatch[1]));
+
+    return text;
+  }
+
+  function installLotLabelStyles() {
+    if (document.getElementById(LOT_LABEL_STYLE_ID)) return;
+
+    const style = document.createElement('style');
+    style.id = LOT_LABEL_STYLE_ID;
+    style.textContent = `
+      .leaflet-tooltip.lot-nv2-number-label {
+        background: rgba(255, 255, 255, 0.88) !important;
+        color: #1f2937 !important;
+        border: 1px solid rgba(255, 255, 255, 0.98) !important;
+        border-radius: 5px !important;
+        box-shadow: none !important;
+        padding: 2px 5px !important;
+        font-size: 11px !important;
+        font-weight: 800 !important;
+        line-height: 1.05 !important;
+        white-space: nowrap !important;
+        pointer-events: none !important;
+        user-select: none !important;
+      }
+
+      .leaflet-tooltip.lot-nv2-number-label::before {
+        display: none !important;
+      }
+
+      @media (max-width: 700px) {
+        .leaflet-tooltip.lot-nv2-number-label {
+          padding: 1px 3px !important;
+          font-size: 10px !important;
+          border-radius: 4px !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function layerMatchesCurrentFilter(layer) {
     if (!showAllLots) return false;
 
@@ -37,6 +87,39 @@
 
     if (!active || active === 'todos' || filtroEstatusActual === 'todos') return true;
     return status === active;
+  }
+
+  function ensureLotNumberLabels() {
+    if (!lotesLayer || typeof lotesLayer.eachLayer !== 'function') return;
+
+    installLotLabelStyles();
+
+    lotesLayer.eachLayer((layer) => {
+      if (!layer || !layer.feature || typeof layer.bindTooltip !== 'function') return;
+
+      const label = lotLabelText(layer.feature);
+      if (!label) return;
+
+      if (layer.__jpLotNumberLabel !== label) {
+        try {
+          if (layer.__jpLotNumberLabel) layer.unbindTooltip();
+        } catch {}
+
+        layer.bindTooltip(label, {
+          permanent: true,
+          direction: 'center',
+          className: 'lot-nv2-number-label',
+          interactive: false,
+          opacity: 1,
+        });
+        layer.__jpLotNumberLabel = label;
+      }
+
+      try {
+        if (layerMatchesCurrentFilter(layer)) layer.openTooltip();
+        else layer.closeTooltip();
+      } catch {}
+    });
   }
 
   function syncLotInteractivity() {
@@ -59,6 +142,14 @@
           element.style.cursor = enabled ? 'pointer' : '';
         }
       } catch {}
+
+      // La numeracion sigue exactamente el mismo filtro visual del lote.
+      try {
+        if (layer.__jpLotNumberLabel) {
+          if (enabled) layer.openTooltip();
+          else layer.closeTooltip();
+        }
+      } catch {}
     });
   }
 
@@ -73,7 +164,10 @@
 
     try { updateToggleLotsButton(); } catch {}
     try { applyFiltroEstatusToLotes(); } catch {}
-    window.setTimeout(syncLotInteractivity, 0);
+    window.setTimeout(() => {
+      ensureLotNumberLabels();
+      syncLotInteractivity();
+    }, 0);
   }
 
   // Misma paleta, opacidad y seleccion visual que Nichos V2.
@@ -116,7 +210,7 @@
   };
 
   // Conserva la logica original de filtrado, pero sincroniza la capacidad de
-  // clic con lo que realmente esta visible en pantalla.
+  // clic y las etiquetas con lo que realmente esta visible en pantalla.
   const originalApplyFiltroEstatusToLotes =
     typeof applyFiltroEstatusToLotes === 'function'
       ? applyFiltroEstatusToLotes
@@ -125,7 +219,29 @@
   if (originalApplyFiltroEstatusToLotes) {
     applyFiltroEstatusToLotes = function () {
       const result = originalApplyFiltroEstatusToLotes.apply(this, arguments);
-      window.requestAnimationFrame(syncLotInteractivity);
+      window.requestAnimationFrame(() => {
+        ensureLotNumberLabels();
+        syncLotInteractivity();
+      });
+      return result;
+    };
+  }
+
+  // Al terminar de cargar la manzana, colocar la numeracion permanente sobre
+  // cada lote. Como lotesLayer contiene solamente la manzana seleccionada, las
+  // etiquetas nunca aparecen sobre otras manzanas/secciones.
+  const originalLoadLotesForCurrentManzana =
+    typeof loadLotesForCurrentManzana === 'function'
+      ? loadLotesForCurrentManzana
+      : null;
+
+  if (originalLoadLotesForCurrentManzana) {
+    loadLotesForCurrentManzana = async function () {
+      const result = await originalLoadLotesForCurrentManzana.apply(this, arguments);
+      window.requestAnimationFrame(() => {
+        ensureLotNumberLabels();
+        syncLotInteractivity();
+      });
       return result;
     };
   }
@@ -227,7 +343,10 @@
         try { updateToggleLotsButton(); } catch {}
         applyFiltroEstatusToLotes();
         refreshManzanaPanel();
-        window.requestAnimationFrame(syncLotInteractivity);
+        window.requestAnimationFrame(() => {
+          ensureLotNumberLabels();
+          syncLotInteractivity();
+        });
       };
     });
   };
@@ -274,7 +393,10 @@
     `);
 
     bindFiltroEstatusButtons();
-    window.requestAnimationFrame(syncLotInteractivity);
+    window.requestAnimationFrame(() => {
+      ensureLotNumberLabels();
+      syncLotInteractivity();
+    });
   };
 
   // Oculta el boton global Mostrar/Ocultar lotes: ahora "Todos" cumple esa funcion.
@@ -283,10 +405,14 @@
     if (button) button.style.display = 'none';
   }
 
+  installLotLabelStyles();
   hideLegacyToggle();
   window.setTimeout(hideLegacyToggle, 100);
   window.setTimeout(hideLegacyToggle, 500);
-  window.setTimeout(syncLotInteractivity, 250);
+  window.setTimeout(() => {
+    ensureLotNumberLabels();
+    syncLotInteractivity();
+  }, 250);
 
-  console.info('[Mapa] Lotes alineados visual y funcionalmente con Nichos V2; seleccion por clic habilitada.');
+  console.info('[Mapa] Lotes alineados con Nichos V2; numeracion por manzana y seleccion por clic habilitadas.');
 })();
