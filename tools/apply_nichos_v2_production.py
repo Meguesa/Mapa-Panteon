@@ -9,6 +9,8 @@ import apply_nichos_v2_v11 as v11
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy"
+SRC_JS = ROOT / "src" / "js"
+SRC_CSS = ROOT / "src" / "css"
 
 
 def replace_once(source: str, old: str, new: str, label: str) -> str:
@@ -18,12 +20,15 @@ def replace_once(source: str, old: str, new: str, label: str) -> str:
 
 
 def copy_runtime_files() -> None:
-    for name in (
-        "nichos-v2-preview.js",
-        "nichos-v2-preview.css",
-        "nichos-v2-map-integration.js",
-    ):
-        shutil.copy2(ROOT / name, DEPLOY / name)
+    files = {
+        SRC_JS / "nichos-v2-preview.js": DEPLOY / "nichos-v2-preview.js",
+        SRC_CSS / "nichos-v2-preview.css": DEPLOY / "nichos-v2-preview.css",
+        SRC_JS / "nichos-v2-map-integration.js": DEPLOY / "nichos-v2-map-integration.js",
+    }
+    for source, destination in files.items():
+        if not source.is_file():
+            raise RuntimeError(f"Archivo fuente faltante: {source}")
+        shutil.copy2(source, destination)
 
 
 def patch_runtime_for_production() -> None:
