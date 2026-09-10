@@ -5,6 +5,7 @@ import shutil
 
 import build_nichos_v2_preview as preview_builder
 import apply_nichos_v2_png_v12 as v14
+import apply_nichos_v2_v11 as v11
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy"
@@ -67,6 +68,19 @@ def inject_assets_into_index() -> None:
     index_path.write_text(source, encoding="utf-8")
 
 
+def apply_preview_functionality_without_version_bump() -> None:
+    """Aplica la funcionalidad validada del preview sin tocar versiones del index.
+
+    En produccion, build_portal_map.py genera un index que todavia no contiene
+    los assets de Nichos V2. Por eso no se debe ejecutar bump_asset_version(),
+    que espera encontrar ?v=10. La version v14 se inyecta despues de forma
+    explicita mediante inject_assets_into_index().
+    """
+    v11.ASSET_NAMES = ()
+    v11.patch_runtime()
+    v11.patch_styles()
+
+
 def validate() -> None:
     required = [
         DEPLOY / "index.php",
@@ -100,6 +114,16 @@ def validate() -> None:
     if "const PREVIEW_ROOT = '/mapa';" not in runtime:
         raise RuntimeError("Nichos V2 no apunta al root de produccion /mapa")
 
+    for marker in (
+        "nichesVisible: true",
+        "state.nichesVisible = !state.nichesVisible",
+        "function renderVectorLabels",
+        "const normalizedWidth = 2048",
+        "function fitWholeImage",
+    ):
+        if marker not in runtime:
+            raise RuntimeError(f"Funcionalidad Nichos V2 faltante: {marker}")
+
 
 def main() -> None:
     # build_portal_map.py debe haberse ejecutado antes.
@@ -111,7 +135,7 @@ def main() -> None:
     # Genera PNG/GeoJSON finales y aplica las mejoras funcionales validadas en v14.
     preview_builder.generate_assets_and_geometries()
     v14.regenerate_geometry_for_new_images()
-    v14.apply_v11_functionality_without_external_assets()
+    apply_preview_functionality_without_version_bump()
     v14.add_label_backing_and_bump_cache()
 
     patch_runtime_for_production()
