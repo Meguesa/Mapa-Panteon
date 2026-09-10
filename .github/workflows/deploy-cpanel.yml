@@ -124,11 +124,16 @@ jobs:
           )
 
           for file in "${required_files[@]}"; do
-            test -s "$file"
+            if [ ! -s "$file" ]; then
+              echo "::error::Archivo requerido faltante o vacio: $file"
+              exit 1
+            fi
           done
 
-          test -d deploy/data
-          test -d deploy/data/lotes
+          if [ ! -d deploy/data/lotes ]; then
+            echo "::error::Carpeta requerida faltante: deploy/data/lotes"
+            exit 1
+          fi
 
           php -l deploy/index.php
           node --check deploy/app.js
@@ -139,22 +144,37 @@ jobs:
           node --check deploy/performance-optimizations.js
           node --check deploy/sharepoint-inventario.js
 
-          grep -q 'Mapa del Panteón' deploy/index.php
-          grep -q 'portal_require_authentication' deploy/index.php
-          grep -q 'section-visual-references.js' deploy/index.php
-          grep -q 'lotes-nv2-match.js?v=1' deploy/index.php
-          grep -q 'nichos-v2-preview.css?v=14' deploy/index.php
-          grep -q 'nichos-v2-preview.js?v=14' deploy/index.php
-          grep -q 'nichos-v2-map-integration.js?v=14' deploy/index.php
-          grep -q 'performance-optimizations.js?v=1' deploy/index.php
-          grep -q "const PREVIEW_ROOT = '/mapa';" deploy/nichos-v2-preview.js
-          grep -q 'SPN-concavo.webp?v=15' deploy/nichos-v2-preview.js
-          grep -q 'state.nichesVisible = !state.nichesVisible' deploy/nichos-v2-preview.js
-          grep -q 'function renderVectorLabels' deploy/nichos-v2-preview.js
-          grep -q 'function fitWholeImage' deploy/nichos-v2-preview.js
-          grep -q 'syncLotInteractivity' deploy/lotes-nv2-match.js
-          grep -q 'seleccion por clic habilitada' deploy/lotes-nv2-match.js
-          grep -q 'jp-inventory-updated' deploy/sharepoint-inventario.js
+          require_contains() {
+            local file="$1"
+            local needle="$2"
+            local label="$3"
+            if ! grep -Fq "$needle" "$file"; then
+              echo "::error::$label no encontrado en $file: $needle"
+              echo "--- Referencias relevantes de $file ---"
+              grep -nE 'lotes-nv2|nichos-v2|performance-optimizations|section-visual|jp-inventory|SPN-concavo|PREVIEW_ROOT' "$file" || true
+              exit 1
+            fi
+          }
+
+          # Validamos presencia y funcionalidad, no numeros de cache-busting.
+          # Las versiones ?v= pueden cambiar independientemente del contrato funcional.
+          require_contains deploy/index.php 'Mapa del Panteón' 'Titulo del mapa'
+          require_contains deploy/index.php 'portal_require_authentication' 'Autenticacion del portal'
+          require_contains deploy/index.php 'section-visual-references.js' 'Referencias visuales'
+          require_contains deploy/index.php 'lotes-nv2-match.js' 'Formato de lotes Nichos V2'
+          require_contains deploy/index.php 'nichos-v2-preview.css' 'CSS de Nichos V2'
+          require_contains deploy/index.php 'nichos-v2-preview.js' 'Runtime de Nichos V2'
+          require_contains deploy/index.php 'nichos-v2-map-integration.js' 'Integracion de Nichos V2'
+          require_contains deploy/index.php 'performance-optimizations.js' 'Optimizaciones de rendimiento'
+
+          require_contains deploy/nichos-v2-preview.js "const PREVIEW_ROOT = '/mapa';" 'Root productivo de Nichos V2'
+          require_contains deploy/nichos-v2-preview.js 'SPN-concavo.webp' 'Imagen WebP optimizada de Nichos V2'
+          require_contains deploy/nichos-v2-preview.js 'state.nichesVisible = !state.nichesVisible' 'Toggle de recuadros de nichos'
+          require_contains deploy/nichos-v2-preview.js 'function renderVectorLabels' 'Etiquetas vectoriales de nichos'
+          require_contains deploy/nichos-v2-preview.js 'function fitWholeImage' 'Ajuste inicial de imagen de nichos'
+          require_contains deploy/lotes-nv2-match.js 'syncLotInteractivity' 'Interactividad de lotes'
+          require_contains deploy/lotes-nv2-match.js 'seleccion por clic habilitada' 'Seleccion de lotes'
+          require_contains deploy/sharepoint-inventario.js 'jp-inventory-updated' 'Actualizacion asincrona de inventario'
 
           python3 - <<'PY'
           import json
@@ -188,6 +208,8 @@ jobs:
 
           print(f'Validados correctamente {len(files)} archivos JSON/GeoJSON.')
           PY
+
+          echo 'Validacion del paquete completada correctamente.'
 
       - name: Preparar paquetes de publicacion
         shell: bash
