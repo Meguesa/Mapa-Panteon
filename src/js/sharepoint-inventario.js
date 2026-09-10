@@ -30,9 +30,11 @@
   };
 
   window.JP_INVENTORY_RUNTIME = {
-    source: "sharepoint",
+    source: "fallback-json",
     mode: ES_LOCAL_DEV ? "localhost" : "portal",
-    redirectUri: CONFIG.redirectUri
+    redirectUri: CONFIG.redirectUri,
+    refreshing: false,
+    inventory: null
   };
 
   const INVENTORY_FILE_SUFFIX = "/data/inventario-base.json";
@@ -41,6 +43,7 @@
   let msalApp = null;
   let authReadyPromise = null;
   let inventoryPromise = null;
+  let liveInventory = null;
 
   function isInventoryRequest(input) {
     const rawUrl = typeof input === "string" ? input : input && input.url;
@@ -221,6 +224,7 @@
       usos_cenizas: number(fields.Usos_Cenizas), fecha_actualizacion: text(fields.Fecha_Actualizacion), fuente_ultima_actualizacion: text(fields.Fuente_Ultima_Actualizacion)
     };
   }
+
   async function loadInventoryFromSharePoint() {
     const accessToken = await getAccessToken();
     const fields = ["Title","Clave_Propiedad","Tipo_Propiedad","Seccion","Manzana","Esta_Construida","Estatus_Venta","Estatus_Uso","Referencia_ProcaP","Fecha_Venta","Fecha_Uso","Fuente_Ultima_Actualizacion","Fecha_Actualizacion","Categoria","Codigo","ZonaId","Cara","Estatus_Ocupacion","Finado","Observaciones","Ultima_Actualizacion_Venta","Ultima_Actualizacion_Ocupacion","Fuente_Actualizacion_Venta","Fuente_Actualizacion_Ocupacion","Observacion_Automatizacion","Capacidad_Inhumaciones","Uso_Inhumacion","Capacidad_Cenizas","Usos_Cenizas","Estatus_Capacidad","Clave_Busqueda_Principal","Claves_Busqueda_Alternas"];
@@ -238,25 +242,92 @@
     });
     return { source: "sharepoint", updatedAt: new Date().toISOString(), items: items };
   }
+
   function inventoryResponse(data) {
-    return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store"
+      }
+    });
   }
+
+  function publishLiveInventory(inventory) {
+    liveInventory = inventory;
+    window.JP_INVENTORY_RUNTIME.source = "sharepoint";
+    window.JP_INVENTORY_RUNTIME.updatedAt = inventory.updatedAt;
+    window.JP_INVENTORY_RUNTIME.refreshing = false;
+    window.JP_INVENTORY_RUNTIME.inventory = inventory;
+
+    console.info(`[Mapa] Inventario actualizado desde SharePoint en segundo plano: ${inventory.items.length} registros.`);
+
+    try {
+      window.dispatchEvent(new CustomEvent("jp-inventory-updated", {
+        detail: { inventory: inventory }
+      }));
+    } catch (_) {}
+
+    return inventory;
+  }
+
+  function startInventoryRefresh() {
+    if (liveInventory) return Promise.resolve(liveInventory);
+    if (inventoryPromise) return inventoryPromise;
+
+    window.JP_INVENTORY_RUNTIME.refreshing = true;
+
+    inventoryPromise = loadInventoryFromSharePoint()
+      .then(publishLiveInventory)
+      .catch(function (error) {
+        inventoryPromise = null;
+        window.JP_INVENTORY_RUNTIME.refreshing = false;
+        window.JP_INVENTORY_RUNTIME.error = error && error.message ? error.message : String(error || "");
+        console.warn("[Mapa] SharePoint no estuvo disponible en segundo plano; se conserva el respaldo local.", error);
+        return null;
+      });
+
+    return inventoryPromise;
+  }
+
+  window.JP_REFRESH_INVENTORY = startInventoryRefresh;
+
+  /*
+   * Rendimiento:
+   * El mapa ya no espera las ~14 paginas de Microsoft Graph antes de dibujarse.
+   * Para la primera solicitud de inventario devolvemos inmediatamente el JSON
+   * local publicado en /data y, en paralelo, actualizamos desde SharePoint.
+   * Cuando termina la sincronizacion se emite jp-inventory-updated para que las
+   * capas visibles adopten los valores actuales sin recargar la pagina.
+   */
   window.fetch = async function (input, init) {
     if (!isInventoryRequest(input)) return originalFetch(input, init);
-    try {
-      if (!inventoryPromise) inventoryPromise = loadInventoryFromSharePoint();
-      const inventory = await inventoryPromise;
-      window.JP_INVENTORY_RUNTIME.source = "sharepoint";
-      window.JP_INVENTORY_RUNTIME.updatedAt = inventory.updatedAt;
-      console.info(`[Mapa] Inventario cargado desde SharePoint: ${inventory.items.length} registros.`);
-      return inventoryResponse(inventory);
-    } catch (error) {
-      inventoryPromise = null;
-      window.JP_INVENTORY_RUNTIME.source = "fallback-json";
-      window.JP_INVENTORY_RUNTIME.error = error && error.message ? error.message : String(error || "");
-      console.error("[Mapa] No se pudo cargar el inventario de SharePoint. Se usará el respaldo JSON.", error);
-      try { if (typeof window.toast === "function") window.toast("No fue posible consultar SharePoint. Se cargará el respaldo temporal.", 6500); } catch {}
-      return originalFetch(input, init);
+
+    if (liveInventory) {
+      return inventoryResponse(liveInventory);
     }
+
+    startInventoryRefresh();
+
+    try {
+      const fallback = await originalFetch(input, {
+        ...(init || {}),
+        cache: "no-cache"
+      });
+      if (fallback.ok) {
+        window.JP_INVENTORY_RUNTIME.source = "fallback-json";
+        return fallback;
+      }
+    } catch (error) {
+      console.warn("[Mapa] No fue posible leer el respaldo local de inventario.", error);
+    }
+
+    const inventory = await startInventoryRefresh();
+    if (inventory) return inventoryResponse(inventory);
+
+    return new Response(JSON.stringify({ source: "unavailable", items: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8" }
+    });
   };
 })();
