@@ -25,7 +25,7 @@ jobs:
   deploy:
     name: Validar y publicar Mapa
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Descargar repositorio
@@ -44,11 +44,18 @@ jobs:
           rm -rf .tmp-msal
           npm install --prefix .tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
 
-      - name: Construir paquete autonomo del Mapa
+      - name: Construir paquete autonomo del Mapa con Nichos V2
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m py_compile \
+            tools/build_portal_map.py \
+            tools/build_nichos_v2_preview.py \
+            tools/apply_nichos_v2_v11.py \
+            tools/apply_nichos_v2_png_v12.py \
+            tools/apply_nichos_v2_production.py
           python3 tools/build_portal_map.py
+          python3 tools/apply_nichos_v2_production.py
           mkdir -p deploy/vendor
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
           rm -rf .tmp-msal
@@ -66,6 +73,9 @@ jobs:
           test -s deploy/portal-integration.css
           test -s deploy/account-menu.css
           test -s deploy/mapa-enhancements.js
+          test -s deploy/nichos-v2-preview.js
+          test -s deploy/nichos-v2-preview.css
+          test -s deploy/nichos-v2-map-integration.js
           test -s deploy/assets/logo.jpg
           test -s deploy/assets/map/base-public.webp
           test -s deploy/assets/americano-01.webp
@@ -75,6 +85,10 @@ jobs:
           test -s deploy/assets/vip-01.webp
           test -s deploy/assets/vip-02.webp
           test -s deploy/assets/vip-03.webp
+          test -s deploy/assets/PLN-concavo.png
+          test -s deploy/assets/PLN-convexo.png
+          test -s deploy/assets/SPN-concavo.png
+          test -s deploy/assets/SPN-convexo.png
           test -s deploy/vendor/msal-browser.min.js
           test -d deploy/data
           test -s deploy/data/lotes.json
@@ -84,10 +98,23 @@ jobs:
           test -s deploy/data/inventario-base.json
           test -s deploy/data/inventario-overrides.json
           test -s deploy/data/paquetes.json
+          test -s deploy/data/PLN-concavo.geojson
+          test -s deploy/data/PLN-convexo.geojson
+          test -s deploy/data/SPN-concavo.geojson
+          test -s deploy/data/SPN-convexo.geojson
+          test -s deploy/data/nichos-zonas.geojson
           php -l deploy/index.php
+          node --check deploy/nichos-v2-preview.js
           grep -q 'Mapa del Panteón' deploy/index.php
           grep -q 'portal_require_authentication' deploy/index.php
           grep -q 'section-visual-references.js' deploy/index.php
+          grep -q 'nichos-v2-preview.css?v=14' deploy/index.php
+          grep -q 'nichos-v2-preview.js?v=14' deploy/index.php
+          grep -q 'nichos-v2-map-integration.js?v=14' deploy/index.php
+          grep -q "const PREVIEW_ROOT = '/mapa';" deploy/nichos-v2-preview.js
+          grep -q 'state.nichesVisible = !state.nichesVisible' deploy/nichos-v2-preview.js
+          grep -q 'function renderVectorLabels' deploy/nichos-v2-preview.js
+          grep -q 'function fitWholeImage' deploy/nichos-v2-preview.js
 
           python3 - <<'PY'
           import json
@@ -105,6 +132,19 @@ jobs:
                       json.load(fh)
               except Exception as exc:
                   raise SystemExit(f'JSON invalido en {path}: {exc}')
+
+          expected = {
+              'PLN-concavo.geojson': 402,
+              'PLN-convexo.geojson': 474,
+              'SPN-concavo.geojson': 306,
+              'SPN-convexo.geojson': 360,
+          }
+          for name, count in expected.items():
+              with (Path('deploy/data') / name).open('r', encoding='utf-8') as fh:
+                  data = json.load(fh)
+              actual = len(data.get('features', []))
+              if actual != count:
+                  raise SystemExit(f'Conteo invalido en {name}: {actual} != {count}')
 
           print(f'Validados correctamente {len(files)} archivos JSON/GeoJSON.')
           PY
@@ -129,6 +169,7 @@ jobs:
             local local_file="$1"
             local remote_file="$2"
             local label="$3"
+            local timeout_seconds="${4:-90}"
 
             if [ ! -f "$local_file" ]; then
               echo "[$label] ERROR: no existe $local_file"
@@ -138,7 +179,7 @@ jobs:
             for attempt in 1 2 3; do
               echo "[$label] intento ${attempt} de 3 -> ${remote_file}"
 
-              if timeout --kill-after=8s 45s lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
+              if timeout --kill-after=10s "${timeout_seconds}s" lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://whm95.mxwebserver.com:21" -e "
                 set cmd:fail-exit yes;
                 set ftp:passive-mode true;
                 set ftp:ssl-force true;
@@ -147,9 +188,11 @@ jobs:
                 set ftp:sync-mode false;
                 set ssl:verify-certificate yes;
                 set ssl:check-hostname yes;
-                set net:timeout 20;
-                set net:max-retries 0;
-                put '$local_file' -o '$remote_file';
+                set net:timeout 30;
+                set net:max-retries 1;
+                put -c '$local_file' -o '$remote_file.tmp';
+                rm -f '$remote_file';
+                mv '$remote_file.tmp' '$remote_file';
                 bye;
               "; then
                 echo "[$label] OK"
@@ -157,8 +200,8 @@ jobs:
               fi
 
               if [ "$attempt" -lt 3 ]; then
-                echo "[$label] transferencia fallida. Reintento en 8 segundos..."
-                sleep 8
+                echo "[$label] transferencia fallida. Reintento en 10 segundos..."
+                sleep 10
               fi
             done
 
@@ -223,6 +266,9 @@ jobs:
           upload_file "deploy/public-ui-fixes.js" "public-ui-fixes.js" "public-ui-fixes.js"
           upload_file "deploy/section-visual-references.js" "section-visual-references.js" "referencias visuales"
           upload_file "deploy/sharepoint-inventario.js" "sharepoint-inventario.js" "sharepoint-inventario.js"
+          upload_file "deploy/nichos-v2-preview.js" "nichos-v2-preview.js" "nichos-v2-preview.js"
+          upload_file "deploy/nichos-v2-preview.css" "nichos-v2-preview.css" "nichos-v2-preview.css"
+          upload_file "deploy/nichos-v2-map-integration.js" "nichos-v2-map-integration.js" "nichos-v2-map-integration.js"
           upload_file "deploy/vendor/msal-browser.min.js" "vendor/msal-browser.min.js" "MSAL local"
 
           echo "=== Referencias visuales ==="
@@ -233,6 +279,17 @@ jobs:
           upload_file "deploy/assets/vip-01.webp" "assets/vip-01.webp" "vip-01"
           upload_file "deploy/assets/vip-02.webp" "assets/vip-02.webp" "vip-02"
           upload_file "deploy/assets/vip-03.webp" "assets/vip-03.webp" "vip-03"
+
+          echo "=== Nichos V2 ==="
+          upload_file "deploy/data/nichos-zonas.geojson" "data/nichos-zonas.geojson" "nichos-zonas-v2"
+          upload_file "deploy/data/PLN-concavo.geojson" "data/PLN-concavo.geojson" "PLN-concavo-geojson"
+          upload_file "deploy/data/PLN-convexo.geojson" "data/PLN-convexo.geojson" "PLN-convexo-geojson"
+          upload_file "deploy/data/SPN-concavo.geojson" "data/SPN-concavo.geojson" "SPN-concavo-geojson"
+          upload_file "deploy/data/SPN-convexo.geojson" "data/SPN-convexo.geojson" "SPN-convexo-geojson"
+          upload_file "deploy/assets/PLN-concavo.png" "assets/PLN-concavo.png" "PLN-concavo" 1200
+          upload_file "deploy/assets/PLN-convexo.png" "assets/PLN-convexo.png" "PLN-convexo" 1200
+          upload_file "deploy/assets/SPN-concavo.png" "assets/SPN-concavo.png" "SPN-concavo" 1200
+          upload_file "deploy/assets/SPN-convexo.png" "assets/SPN-convexo.png" "SPN-convexo" 1200
 
           echo "=== Archivos de datos pequenos necesarios ==="
           upload_file "deploy/data/lotes.json" "data/lotes.json" "lotes.json"
@@ -245,25 +302,19 @@ jobs:
             upload_file "deploy/data/catalogo-propiedades.json" "data/catalogo-propiedades.json" "catalogo-propiedades.json"
             upload_file "deploy/data/inventario-base.json" "data/inventario-base.json" "inventario-base.json"
             upload_file "deploy/data/nichos-overlay.geojson" "data/nichos-overlay.geojson" "nichos-overlay.geojson"
-            upload_file "deploy/data/nichos-zonas.geojson" "data/nichos-zonas.geojson" "nichos-zonas.geojson"
             upload_file "deploy/data/secciones-top.geojson" "data/secciones-top.geojson" "secciones-top.geojson"
             upload_file "deploy/data/secciones.geojson" "data/secciones.geojson" "secciones.geojson"
             upload_file "deploy/assets/logo.jpg" "assets/logo.jpg" "logo"
-            upload_file "deploy/assets/map/base-public.webp" "assets/map/base-public.webp" "mapa base"
+            upload_file "deploy/assets/map/base-public.webp" "assets/map/base-public.webp" "mapa base" 1200
 
             while IFS= read -r -d '' file; do
               remote="${file#deploy/}"
               upload_file "$file" "$remote" "$remote"
             done < <(find deploy/data/lotes -type f -print0 | sort -z)
 
-            while IFS= read -r -d '' file; do
-              remote="${file#deploy/}"
-              upload_file "$file" "$remote" "$remote"
-            done < <(find deploy/data/nichos -type f -print0 | sort -z)
-
-            echo "Las imagenes grandes de assets/nichos se mantienen fuera del FTPS para evitar timeouts."
+            echo "Las imagenes legacy de assets/nichos se mantienen fuera del FTPS; produccion usa ahora Nichos V2."
           else
             echo "Datos estructurales sin cambios: se conserva la version estable ya publicada en cPanel."
           fi
 
-          echo "Publicacion incremental del Mapa completada correctamente."
+          echo "Publicacion del Mapa con Nichos V2 completada correctamente."
