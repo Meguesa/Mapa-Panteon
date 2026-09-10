@@ -191,9 +191,11 @@ jobs:
                 set net:reconnect-interval-base 5;
                 set net:reconnect-interval-max 15;
                 set xfer:clobber yes;
-                mkdir -p assets;
-                mkdir -p data;
-                mkdir -p vendor;
+                set cmd:fail-exit no;
+                mkdir assets;
+                mkdir data;
+                mkdir vendor;
+                set cmd:fail-exit yes;
                 ${commands}
                 bye;
               "; then
