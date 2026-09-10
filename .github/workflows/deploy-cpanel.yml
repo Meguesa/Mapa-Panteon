@@ -14,7 +14,7 @@ on:
         default: false
         type: boolean
       publicar_imagenes_nichos_v2:
-        description: 'Republicar las 4 imagenes PNG grandes de Nichos V2'
+        description: 'Republicar adicionalmente los activos optimizados de Nichos V2'
         required: false
         default: false
         type: boolean
@@ -41,6 +41,12 @@ jobs:
         with:
           php-version: '8.2'
           coverage: none
+
+      - name: Preparar optimizador de imagenes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow
 
       - name: Instalar MSAL local para produccion
         shell: bash
@@ -84,6 +90,7 @@ jobs:
             deploy/nichos-v2-preview.js
             deploy/nichos-v2-preview.css
             deploy/nichos-v2-map-integration.js
+            deploy/performance-optimizations.js
             deploy/assets/logo.jpg
             deploy/assets/map/base-public.webp
             deploy/assets/americano-01.webp
@@ -97,6 +104,10 @@ jobs:
             deploy/assets/PLN-convexo.png
             deploy/assets/SPN-concavo.png
             deploy/assets/SPN-convexo.png
+            deploy/assets/PLN-concavo.webp
+            deploy/assets/PLN-convexo.webp
+            deploy/assets/SPN-concavo.webp
+            deploy/assets/SPN-convexo.webp
             deploy/vendor/msal-browser.min.js
             deploy/data/lotes.json
             deploy/data/secciones.geojson
@@ -125,6 +136,8 @@ jobs:
           node --check deploy/lotes-nv2-match.js
           node --check deploy/nichos-v2-preview.js
           node --check deploy/nichos-v2-map-integration.js
+          node --check deploy/performance-optimizations.js
+          node --check deploy/sharepoint-inventario.js
 
           grep -q 'Mapa del Panteón' deploy/index.php
           grep -q 'portal_require_authentication' deploy/index.php
@@ -133,12 +146,15 @@ jobs:
           grep -q 'nichos-v2-preview.css?v=14' deploy/index.php
           grep -q 'nichos-v2-preview.js?v=14' deploy/index.php
           grep -q 'nichos-v2-map-integration.js?v=14' deploy/index.php
+          grep -q 'performance-optimizations.js?v=1' deploy/index.php
           grep -q "const PREVIEW_ROOT = '/mapa';" deploy/nichos-v2-preview.js
+          grep -q 'SPN-concavo.webp?v=15' deploy/nichos-v2-preview.js
           grep -q 'state.nichesVisible = !state.nichesVisible' deploy/nichos-v2-preview.js
           grep -q 'function renderVectorLabels' deploy/nichos-v2-preview.js
           grep -q 'function fitWholeImage' deploy/nichos-v2-preview.js
           grep -q 'syncLotInteractivity' deploy/lotes-nv2-match.js
           grep -q 'seleccion por clic habilitada' deploy/lotes-nv2-match.js
+          grep -q 'jp-inventory-updated' deploy/sharepoint-inventario.js
 
           python3 - <<'PY'
           import json
@@ -179,8 +195,6 @@ jobs:
           set -euo pipefail
           rm -rf deploy-code deploy-visual deploy-nichos-assets deploy-structural
 
-          # Paquete normal: solo codigo, dependencias, referencias visuales pequenas
-          # y geometria pequena de Nichos V2. No vuelve a transferir imagenes de 40-55 MB.
           mkdir -p deploy-code/assets deploy-code/data deploy-code/vendor
 
           for file in \
@@ -196,7 +210,8 @@ jobs:
             sharepoint-inventario.js \
             nichos-v2-preview.js \
             nichos-v2-preview.css \
-            nichos-v2-map-integration.js; do
+            nichos-v2-map-integration.js \
+            performance-optimizations.js; do
             cp "deploy/$file" "deploy-code/$file"
           done
 
@@ -210,7 +225,11 @@ jobs:
             americano-04.webp \
             vip-01.webp \
             vip-02.webp \
-            vip-03.webp; do
+            vip-03.webp \
+            PLN-concavo.webp \
+            PLN-convexo.webp \
+            SPN-concavo.webp \
+            SPN-convexo.webp; do
             cp "deploy/assets/$file" "deploy-code/assets/$file"
           done
 
@@ -226,7 +245,6 @@ jobs:
             cp "deploy/data/$file" "deploy-code/data/$file"
           done
 
-          # Paquete exclusivo de referencias visuales.
           mkdir -p deploy-visual/assets
           cp deploy/section-visual-references.js deploy-visual/section-visual-references.js
           for file in \
@@ -240,17 +258,15 @@ jobs:
             cp "deploy/assets/$file" "deploy-visual/assets/$file"
           done
 
-          # Paquete de imagenes grandes de Nichos V2. Solo se publica bajo solicitud.
           mkdir -p deploy-nichos-assets/assets
           for file in \
-            PLN-concavo.png \
-            PLN-convexo.png \
-            SPN-concavo.png \
-            SPN-convexo.png; do
+            PLN-concavo.webp \
+            PLN-convexo.webp \
+            SPN-concavo.webp \
+            SPN-convexo.webp; do
             cp "deploy/assets/$file" "deploy-nichos-assets/assets/$file"
           done
 
-          # Paquete estructural. Solo se publica bajo solicitud.
           mkdir -p deploy-structural/assets/map deploy-structural/data
           cp deploy/assets/map/base-public.webp deploy-structural/assets/map/base-public.webp
           cp deploy/data/catalogo-propiedades.json deploy-structural/data/catalogo-propiedades.json
@@ -264,7 +280,7 @@ jobs:
           du -sh deploy-code
           echo 'Referencias visuales:'
           du -sh deploy-visual
-          echo 'Imagenes grandes Nichos V2:'
+          echo 'Imagenes optimizadas Nichos V2:'
           du -sh deploy-nichos-assets
           echo 'Datos estructurales:'
           du -sh deploy-structural
@@ -303,7 +319,7 @@ jobs:
           dry-run: false
           log-level: standard
 
-      - name: Publicar codigo y datos pequenos
+      - name: Publicar codigo, datos pequenos y activos optimizados
         if: ${{ inputs.publicar_solo_referencias_visuales == false }}
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
@@ -313,14 +329,14 @@ jobs:
           protocol: ftps
           port: 21
           security: strict
-          timeout: 180000
+          timeout: 300000
           local-dir: ./deploy-code/
           server-dir: ./
-          state-name: .ftp-deploy-sync-state-code-v2.json
+          state-name: .ftp-deploy-sync-state-code-v3.json
           dry-run: false
           log-level: standard
 
-      - name: Publicar imagenes grandes de Nichos V2
+      - name: Republicar activos optimizados de Nichos V2
         if: ${{ inputs.publicar_solo_referencias_visuales == false && inputs.publicar_imagenes_nichos_v2 == true }}
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
@@ -330,10 +346,10 @@ jobs:
           protocol: ftps
           port: 21
           security: strict
-          timeout: 900000
+          timeout: 600000
           local-dir: ./deploy-nichos-assets/
           server-dir: ./
-          state-name: .ftp-deploy-sync-state-nichos-v2.json
+          state-name: .ftp-deploy-sync-state-nichos-v2-v3.json
           dry-run: false
           log-level: standard
 
