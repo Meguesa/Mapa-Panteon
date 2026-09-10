@@ -25,6 +25,7 @@ def copy_runtime_files() -> None:
         SRC_JS / "nichos-v2-preview.js": DEPLOY / "nichos-v2-preview.js",
         SRC_CSS / "nichos-v2-preview.css": DEPLOY / "nichos-v2-preview.css",
         SRC_JS / "nichos-v2-map-integration.js": DEPLOY / "nichos-v2-map-integration.js",
+        SRC_JS / "performance-optimizations.js": DEPLOY / "performance-optimizations.js",
     }
     for source, destination in files.items():
         if not source.is_file():
@@ -92,8 +93,6 @@ def patch_runtime_for_production() -> None:
     )
     source = source.replace("PREVIEW V2", "NICHOS")
 
-    # Produccion usa las copias WebP ligeras. Los PNG quedan como maestros de
-    # construccion y respaldo, pero ya no se descargan al abrir un columbario.
     for name in ("PLN-concavo", "PLN-convexo", "SPN-concavo", "SPN-convexo"):
         source = source.replace(
             f"/assets/{name}.png?v=14",
@@ -120,14 +119,21 @@ def inject_assets_into_index() -> None:
             "CSS Nichos V2",
         )
 
+    scripts = []
     if "nichos-v2-preview.js" not in source:
+        scripts.extend([
+            '  <script src="./nichos-v2-preview.js?v=14"></script>',
+            '  <script src="./nichos-v2-map-integration.js?v=14"></script>',
+        ])
+    if "performance-optimizations.js" not in source:
+        scripts.append('  <script src="./performance-optimizations.js?v=1"></script>')
+
+    if scripts:
         source = replace_once(
             source,
             "</body>",
-            '  <script src="./nichos-v2-preview.js?v=14"></script>\n'
-            '  <script src="./nichos-v2-map-integration.js?v=14"></script>\n'
-            "</body>",
-            "JS Nichos V2",
+            "\n".join(scripts) + "\n</body>",
+            "JS Nichos V2 y rendimiento",
         )
 
     index_path.write_text(source, encoding="utf-8")
@@ -145,6 +151,7 @@ def validate() -> None:
         DEPLOY / "nichos-v2-preview.js",
         DEPLOY / "nichos-v2-preview.css",
         DEPLOY / "nichos-v2-map-integration.js",
+        DEPLOY / "performance-optimizations.js",
         DEPLOY / "assets" / "PLN-concavo.png",
         DEPLOY / "assets" / "PLN-convexo.png",
         DEPLOY / "assets" / "SPN-concavo.png",
@@ -169,6 +176,7 @@ def validate() -> None:
         "nichos-v2-preview.css?v=14",
         "nichos-v2-preview.js?v=14",
         "nichos-v2-map-integration.js?v=14",
+        "performance-optimizations.js?v=1",
     ):
         if marker not in index:
             raise RuntimeError(f"Marcador faltante en index.php: {marker}")
@@ -189,25 +197,21 @@ def validate() -> None:
 
 
 def main() -> None:
-    # build_portal_map.py debe haberse ejecutado antes.
     copy_runtime_files()
     preview_builder.patch_app_hover()
     preview_builder.patch_sharepoint_niche_codes()
     preview_builder.patch_preview_runtime()
 
-    # Genera los PNG maestros/GeoJSON y aplica la calibracion validada.
     preview_builder.generate_assets_and_geometries()
     v14.regenerate_geometry_for_new_images()
     apply_preview_functionality_without_version_bump()
     v14.add_label_backing_and_bump_cache()
 
-    # A partir de los maestros generamos recursos ligeros exclusivamente para
-    # la experiencia web de produccion.
     generate_optimized_niche_images()
     patch_runtime_for_production()
     inject_assets_into_index()
     validate()
-    print("Nichos V2 integrados al paquete de produccion /mapa/ con imagenes WebP optimizadas.")
+    print("Nichos V2 integrados al paquete de produccion /mapa/ con imagenes WebP optimizadas y mejoras de rendimiento.")
 
 
 if __name__ == "__main__":
