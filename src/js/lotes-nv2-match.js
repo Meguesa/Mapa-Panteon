@@ -29,6 +29,39 @@
     }
   }
 
+  function layerMatchesCurrentFilter(layer) {
+    if (!showAllLots) return false;
+
+    const status = normStatus(getLoteStatus(layer?.feature));
+    const active = normStatus(filtroEstatusActual || 'todos');
+
+    if (!active || active === 'todos' || filtroEstatusActual === 'todos') return true;
+    return status === active;
+  }
+
+  function syncLotInteractivity() {
+    if (!lotesLayer || typeof lotesLayer.eachLayer !== 'function') return;
+
+    lotesLayer.eachLayer((layer) => {
+      const enabled = layerMatchesCurrentFilter(layer);
+
+      // Leaflet decide si un Path es interactivo cuando crea el SVG. Por eso
+      // nunca creamos los lotes con interactive:false; aqui solo controlamos
+      // pointer-events segun si el lote esta visible por el filtro actual.
+      try {
+        layer.options.interactive = enabled;
+      } catch {}
+
+      try {
+        const element = layer.getElement ? layer.getElement() : layer._path;
+        if (element) {
+          element.style.pointerEvents = enabled ? 'auto' : 'none';
+          element.style.cursor = enabled ? 'pointer' : '';
+        }
+      } catch {}
+    });
+  }
+
   function ensureInitialLotVisibility() {
     const key = currentManzanaKey();
     if (!key || key === '|') return;
@@ -40,9 +73,10 @@
 
     try { updateToggleLotsButton(); } catch {}
     try { applyFiltroEstatusToLotes(); } catch {}
+    window.setTimeout(syncLotInteractivity, 0);
   }
 
-  // Misma paleta, opacidad y selección visual que Nichos V2.
+  // Misma paleta, opacidad y seleccion visual que Nichos V2.
   styleByStatus = function (status) {
     const meta = statusMeta(status);
     return {
@@ -54,12 +88,15 @@
     };
   };
 
+  // IMPORTANTE: no usar interactive:false aqui. Los lotes se crean ocultos y
+  // despues se muestran; Leaflet no vuelve a registrar la interaccion SVG al
+  // cambiar solamente el estilo. Ese era el motivo por el que se veian los
+  // recuadros pero no respondian al clic.
   lotHiddenStyle = function () {
     return {
       weight: 1,
       opacity: 0,
       fillOpacity: 0,
-      interactive: false,
     };
   };
 
@@ -77,6 +114,21 @@
       fillOpacity: 0.78,
     };
   };
+
+  // Conserva la logica original de filtrado, pero sincroniza la capacidad de
+  // clic con lo que realmente esta visible en pantalla.
+  const originalApplyFiltroEstatusToLotes =
+    typeof applyFiltroEstatusToLotes === 'function'
+      ? applyFiltroEstatusToLotes
+      : null;
+
+  if (originalApplyFiltroEstatusToLotes) {
+    applyFiltroEstatusToLotes = function () {
+      const result = originalApplyFiltroEstatusToLotes.apply(this, arguments);
+      window.requestAnimationFrame(syncLotInteractivity);
+      return result;
+    };
+  }
 
   function legendHtml() {
     const order = ['disponible', 'separado', 'vendido', 'utilizado', 'suspendido', 'por_construir'];
@@ -175,6 +227,7 @@
         try { updateToggleLotsButton(); } catch {}
         applyFiltroEstatusToLotes();
         refreshManzanaPanel();
+        window.requestAnimationFrame(syncLotInteractivity);
       };
     });
   };
@@ -218,9 +271,10 @@
     `);
 
     bindFiltroEstatusButtons();
+    window.requestAnimationFrame(syncLotInteractivity);
   };
 
-  // Oculta el botón global Mostrar/Ocultar lotes: ahora "Todos" cumple esa función.
+  // Oculta el boton global Mostrar/Ocultar lotes: ahora "Todos" cumple esa funcion.
   function hideLegacyToggle() {
     const button = document.getElementById('toggleLotsBtn');
     if (button) button.style.display = 'none';
@@ -229,6 +283,7 @@
   hideLegacyToggle();
   window.setTimeout(hideLegacyToggle, 100);
   window.setTimeout(hideLegacyToggle, 500);
+  window.setTimeout(syncLotInteractivity, 250);
 
-  console.info('[Mapa] Lotes alineados visual y funcionalmente con Nichos V2.');
+  console.info('[Mapa] Lotes alineados visual y funcionalmente con Nichos V2; seleccion por clic habilitada.');
 })();
