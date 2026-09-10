@@ -287,8 +287,6 @@ def build_index() -> None:
     source = require_replace(source, '<div id="map"></div>', '<div id="map" class="map"></div>', "contenedor del mapa")
     source = require_replace(source, "<aside>", '<aside class="panel">', "panel lateral")
 
-    # app.js se inserta dinamicamente en index.html. El formato de lotes depende
-    # de sus funciones/globales, por lo que debe cargarse DESPUES de app.js.
     original_app_onload = '''      s.onload = function () {
         var fixes = document.createElement("script");
         fixes.src = "./public-ui-fixes.js?v=" + encodeURIComponent(window.APP_VERSION);
@@ -301,7 +299,7 @@ def build_index() -> None:
         document.body.appendChild(fixes);
 
         var lotesMatch = document.createElement("script");
-        lotesMatch.src = "./lotes-nv2-match.js?v=" + encodeURIComponent(window.APP_VERSION);
+        lotesMatch.src = "./lotes-nv2-match.js?v=1&bust=" + encodeURIComponent(window.APP_VERSION);
         lotesMatch.onload = function () {
           console.info("[Mapa] Formato Nichos V2 aplicado a lotes.");
         };
