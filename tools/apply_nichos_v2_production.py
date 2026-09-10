@@ -12,6 +12,7 @@ DEPLOY = ROOT / "deploy"
 SRC_JS = ROOT / "src" / "js"
 SRC_CSS = ROOT / "src" / "css"
 NICHOS_IMAGE_VERSION = "15"
+NICHOS_RUNTIME_VERSION = "15"
 
 
 def replace_once(source: str, old: str, new: str, label: str) -> str:
@@ -106,6 +107,117 @@ def patch_runtime_for_production() -> None:
     runtime_path.write_text(source, encoding="utf-8")
 
 
+def patch_niche_hover_tooltips() -> None:
+    """Evita tooltips de estatus congelados al recorrer nichos con el mouse.
+
+    Leaflet abre/cierra el tooltip automaticamente, pero mover el Path con
+    bringToFront() durante mouseover puede interrumpir la secuencia mouseout y
+    dejar nodos del tooltip visibles. El runtime final controla ahora el ciclo
+    de vida de forma explicita y elimina cualquier tooltip huerfano.
+    """
+    runtime_path = DEPLOY / "nichos-v2-preview.js"
+    source = runtime_path.read_text(encoding="utf-8")
+
+    helper_marker = "\n  function renderNicheLayer() {"
+    helper = r'''
+  let activeNicheHoverLayer = null;
+
+  function clearNicheHoverTooltip() {
+    if (activeNicheHoverLayer) {
+      try { activeNicheHoverLayer.closeTooltip(); } catch (_) {}
+      activeNicheHoverLayer = null;
+    }
+
+    try {
+      const tooltipPane = state.map?.getPane?.('tooltipPane');
+      tooltipPane
+        ?.querySelectorAll('.nv2-niche-hover-tooltip')
+        .forEach((node) => node.remove());
+    } catch (_) {}
+  }
+'''
+    source = replace_once(
+        source,
+        helper_marker,
+        f"\n{helper}{helper_marker}",
+        "helper de limpieza de tooltip de nichos",
+    )
+
+    source = replace_once(
+        source,
+        """  function renderNicheLayer() {
+    if (!state.map || !state.featureCollection) return;
+
+    if (state.nicheLayer) {""",
+        """  function renderNicheLayer() {
+    if (!state.map || !state.featureCollection) return;
+
+    clearNicheHoverTooltip();
+
+    if (state.nicheLayer) {""",
+        "limpieza antes de reconstruir capa de nichos",
+    )
+
+    source = replace_once(
+        source,
+        """        layer.bindTooltip(`${label} · ${STATUS_META[status]?.label || 'Sin estado'}`, {
+          direction: 'top',
+          opacity: 0.95,
+        });""",
+        """        layer.bindTooltip(`${label} · ${STATUS_META[status]?.label || 'Sin estado'}`, {
+          direction: 'top',
+          opacity: 0.95,
+          interactive: false,
+          permanent: false,
+          className: 'nv2-niche-hover-tooltip',
+        });""",
+        "opciones seguras de tooltip",
+    )
+
+    source = replace_once(
+        source,
+        """        layer.on('mouseover', () => {
+          layer.setStyle({ weight: 2, fillOpacity: 0.36 });
+          layer.bringToFront();
+        });
+
+        layer.on('mouseout', () => {
+          layer.setStyle(featureStyle(feature));
+        });""",
+        """        layer.on('mouseover', (event) => {
+          clearNicheHoverTooltip();
+          activeNicheHoverLayer = layer;
+          try {
+            layer.openTooltip(event?.latlng);
+          } catch (_) {
+            try { layer.openTooltip(); } catch (_) {}
+          }
+          layer.setStyle({ weight: 2, fillOpacity: 0.36 });
+        });
+
+        layer.on('mouseout', () => {
+          try { layer.closeTooltip(); } catch (_) {}
+          if (activeNicheHoverLayer === layer) activeNicheHoverLayer = null;
+          layer.setStyle(featureStyle(feature));
+        });""",
+        "control explicito de hover y tooltip",
+    )
+
+    source = replace_once(
+        source,
+        """  function closePreview() {
+    if (!state.modal) return;
+    state.modal.classList.remove('is-open');""",
+        """  function closePreview() {
+    if (!state.modal) return;
+    clearNicheHoverTooltip();
+    state.modal.classList.remove('is-open');""",
+        "limpieza de tooltip al cerrar preview",
+    )
+
+    runtime_path.write_text(source, encoding="utf-8")
+
+
 def inject_assets_into_index() -> None:
     index_path = DEPLOY / "index.php"
     source = index_path.read_text(encoding="utf-8")
@@ -135,6 +247,11 @@ def inject_assets_into_index() -> None:
             "\n".join(scripts) + "\n</body>",
             "JS Nichos V2 y rendimiento",
         )
+
+    source = source.replace(
+        "nichos-v2-preview.js?v=14",
+        f"nichos-v2-preview.js?v={NICHOS_RUNTIME_VERSION}",
+    )
 
     index_path.write_text(source, encoding="utf-8")
 
@@ -174,7 +291,7 @@ def validate() -> None:
 
     for marker in (
         "nichos-v2-preview.css?v=14",
-        "nichos-v2-preview.js?v=14",
+        f"nichos-v2-preview.js?v={NICHOS_RUNTIME_VERSION}",
         "nichos-v2-map-integration.js?v=14",
         "performance-optimizations.js?v=1",
     ):
@@ -190,6 +307,8 @@ def validate() -> None:
         "function renderVectorLabels",
         "const normalizedWidth = 2048",
         "function fitWholeImage",
+        "function clearNicheHoverTooltip",
+        "nv2-niche-hover-tooltip",
         f"SPN-concavo.webp?v={NICHOS_IMAGE_VERSION}",
     ):
         if marker not in runtime:
@@ -209,6 +328,7 @@ def main() -> None:
 
     generate_optimized_niche_images()
     patch_runtime_for_production()
+    patch_niche_hover_tooltips()
     inject_assets_into_index()
     validate()
     print("Nichos V2 integrados al paquete de produccion /mapa/ con imagenes WebP optimizadas y mejoras de rendimiento.")
