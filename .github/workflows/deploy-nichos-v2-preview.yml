@@ -50,7 +50,7 @@ jobs:
           rm -rf .tmp-msal
           npm install --prefix .tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
 
-      - name: Construir preview aislado v13
+      - name: Construir preview aislado v14
         shell: bash
         run: |
           set -euo pipefail
@@ -64,7 +64,7 @@ jobs:
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
           rm -rf .tmp-msal
 
-      - name: Validar preview v13
+      - name: Validar preview v14
         shell: bash
         run: |
           set -euo pipefail
@@ -88,11 +88,11 @@ jobs:
 
           php -l deploy/index.php
           node --check deploy/nichos-v2-preview.js
-          grep -q 'nichos-v2-preview.css?v=13' deploy/index.php
-          grep -q 'nichos-v2-preview.js?v=13' deploy/index.php
-          grep -q 'nichos-v2-map-integration.js?v=13' deploy/index.php
+          grep -q 'nichos-v2-preview.css?v=14' deploy/index.php
+          grep -q 'nichos-v2-preview.js?v=14' deploy/index.php
+          grep -q 'nichos-v2-map-integration.js?v=14' deploy/index.php
           grep -q 'dirname(__DIR__, 2)' deploy/index.php
-          grep -q 'SPN-convexo.png?v=13' deploy/nichos-v2-preview.js
+          grep -q 'SPN-convexo.png?v=14' deploy/nichos-v2-preview.js
           grep -q 'state.nichesVisible = !state.nichesVisible' deploy/nichos-v2-preview.js
           grep -q 'function renderVectorLabels' deploy/nichos-v2-preview.js
           grep -q 'nv2LabelsPane' deploy/nichos-v2-preview.js
@@ -234,4 +234,4 @@ jobs:
           publish_asset 'deploy/assets/SPN-concavo.png' 'assets/SPN-concavo.png' 'SPN-concavo.png'
           publish_asset 'deploy/assets/SPN-convexo.png' 'assets/SPN-convexo.png' 'SPN-convexo.png'
 
-          echo "Preview Nichos V2 v13 actualizado correctamente en /mapa/${REMOTE_DIR}/"
+          echo "Preview Nichos V2 v14 actualizado correctamente en /mapa/${REMOTE_DIR}/"
