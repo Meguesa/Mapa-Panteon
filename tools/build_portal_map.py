@@ -86,6 +86,13 @@ def build_app_js() -> None:
       throw localError;
     }
 
+    // inventario-base.json esta interceptado por sharepoint-inventario.js.
+    // Si SharePoint falla no debemos sustituirlo silenciosamente por una copia
+    // local/GitHub potencialmente desactualizada.
+    if (repoRelative === "data/inventario-base.json") {
+      throw localError;
+    }
+
     const fallbackUrl = `https://raw.githubusercontent.com/Meguesa/Mapa-Panteon/main/${repoRelative}`;
     console.warn(`[Mapa] Fallo el archivo local ${value}. Se intentara respaldo GitHub.`, localError);
 
@@ -106,6 +113,160 @@ def build_app_js() -> None:
     source = source.replace(original_loader, robust_loader, 1)
 
     (TARGET_DIR / "app.js").write_text(source, encoding="utf-8")
+
+
+def patch_sharepoint_inventory_for_direct_load() -> None:
+    """Hace de SharePoint la fuente primaria y bloqueante del inventario.
+
+    El mapa ya no pinta primero inventario-base.json para sustituirlo despues.
+    La solicitud a inventario-base.json espera a Microsoft Graph y devuelve esos
+    datos. Si Graph falla se responde con error, evitando mostrar informacion
+    local desactualizada como si fuera vigente.
+    """
+    path = TARGET_DIR / "sharepoint-inventario.js"
+    source = path.read_text(encoding="utf-8")
+
+    source = require_replace(
+        source,
+        '    source: "fallback-json",',
+        '    source: "sharepoint-pending",',
+        "estado inicial del inventario SharePoint",
+    )
+
+    source = require_replace(
+        source,
+        '    console.info(`[Mapa] Inventario actualizado desde SharePoint en segundo plano: ${inventory.items.length} registros.`);',
+        '    console.info(`[Mapa] Inventario cargado directamente desde SharePoint: ${inventory.items.length} registros.`);',
+        "mensaje de inventario SharePoint",
+    )
+
+    old_refresh = '''  function startInventoryRefresh() {
+    if (liveInventory) return Promise.resolve(liveInventory);
+    if (inventoryPromise) return inventoryPromise;
+
+    window.JP_INVENTORY_RUNTIME.refreshing = true;
+
+    inventoryPromise = loadInventoryFromSharePoint()
+      .then(publishLiveInventory)
+      .catch(function (error) {
+        inventoryPromise = null;
+        window.JP_INVENTORY_RUNTIME.refreshing = false;
+        window.JP_INVENTORY_RUNTIME.error = error && error.message ? error.message : String(error || "");
+        console.warn("[Mapa] SharePoint no estuvo disponible en segundo plano; se conserva el respaldo local.", error);
+        return null;
+      });
+
+    return inventoryPromise;
+  }'''
+
+    direct_refresh = '''  function startInventoryRefresh() {
+    if (liveInventory) return Promise.resolve(liveInventory);
+    if (inventoryPromise) return inventoryPromise;
+
+    window.JP_INVENTORY_RUNTIME.refreshing = true;
+    window.JP_INVENTORY_RUNTIME.source = "sharepoint-loading";
+    delete window.JP_INVENTORY_RUNTIME.error;
+
+    inventoryPromise = loadInventoryFromSharePoint()
+      .then(publishLiveInventory)
+      .catch(function (error) {
+        inventoryPromise = null;
+        window.JP_INVENTORY_RUNTIME.refreshing = false;
+        window.JP_INVENTORY_RUNTIME.source = "sharepoint-error";
+        window.JP_INVENTORY_RUNTIME.error = error && error.message ? error.message : String(error || "");
+        console.error("[Mapa] No fue posible cargar el inventario directamente desde SharePoint.", error);
+        throw error;
+      });
+
+    return inventoryPromise;
+  }'''
+
+    source = require_replace(
+        source,
+        old_refresh,
+        direct_refresh,
+        "carga directa de inventario SharePoint",
+    )
+
+    old_fetch = '''  /*
+   * Rendimiento:
+   * El mapa ya no espera las ~14 paginas de Microsoft Graph antes de dibujarse.
+   * Para la primera solicitud de inventario devolvemos inmediatamente el JSON
+   * local publicado en /data y, en paralelo, actualizamos desde SharePoint.
+   * Cuando termina la sincronizacion se emite jp-inventory-updated para que las
+   * capas visibles adopten los valores actuales sin recargar la pagina.
+   */
+  window.fetch = async function (input, init) {
+    if (!isInventoryRequest(input)) return originalFetch(input, init);
+
+    if (liveInventory) {
+      return inventoryResponse(liveInventory);
+    }
+
+    startInventoryRefresh();
+
+    try {
+      const fallback = await originalFetch(input, {
+        ...(init || {}),
+        cache: "no-cache"
+      });
+      if (fallback.ok) {
+        window.JP_INVENTORY_RUNTIME.source = "fallback-json";
+        return fallback;
+      }
+    } catch (error) {
+      console.warn("[Mapa] No fue posible leer el respaldo local de inventario.", error);
+    }
+
+    const inventory = await startInventoryRefresh();
+    if (inventory) return inventoryResponse(inventory);
+
+    return new Response(JSON.stringify({ source: "unavailable", items: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8" }
+    });
+  };'''
+
+    direct_fetch = '''  /*
+   * SharePoint es la fuente de verdad del inventario en produccion.
+   * La primera solicitud de inventario espera a Microsoft Graph antes de
+   * continuar con el mapa; ya no se pinta un JSON local para reemplazarlo
+   * posteriormente. Esto evita estados parciales o desfasados en lotes/nichos.
+   */
+  window.fetch = async function (input, init) {
+    if (!isInventoryRequest(input)) return originalFetch(input, init);
+
+    if (liveInventory) {
+      return inventoryResponse(liveInventory);
+    }
+
+    try {
+      const inventory = await startInventoryRefresh();
+      return inventoryResponse(inventory);
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error || "Error desconocido");
+      return new Response(JSON.stringify({
+        source: "sharepoint-error",
+        items: [],
+        error: message
+      }), {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        }
+      });
+    }
+  };'''
+
+    source = require_replace(
+        source,
+        old_fetch,
+        direct_fetch,
+        "intercepcion directa del inventario SharePoint",
+    )
+
+    path.write_text(source, encoding="utf-8")
 
 
 def copy_files() -> None:
@@ -155,6 +316,8 @@ def copy_files() -> None:
     for source_path, target_name in flat_sources.items():
         shutil.copy2(source_path, TARGET_DIR / target_name)
 
+    patch_sharepoint_inventory_for_direct_load()
+
     assets_dir = TARGET_DIR / "assets"
     (assets_dir / "map").mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / "assets/map/base-public.webp", assets_dir / "map/base-public.webp")
@@ -184,6 +347,15 @@ def build_index() -> None:
         "./src/js/section-visual-references.js": "./section-visual-references.js",
     }.items():
         source = source.replace(source_ref, deploy_ref)
+
+    # Forzar al navegador a descargar la version que espera SharePoint antes de
+    # pintar el inventario, evitando reutilizar el JS anterior de segundo plano.
+    source = re.sub(
+        r'sharepoint-inventario\.js\?v=[^"\']+',
+        'sharepoint-inventario.js?v=20260910b',
+        source,
+        count=1,
+    )
 
     msal_pattern = re.compile(
         r'\s*<!-- Microsoft Authentication Library -->\s*'
