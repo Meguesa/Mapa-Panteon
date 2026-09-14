@@ -10,6 +10,7 @@ on:
       - 'data/secciones-top.geojson'
       - 'data/secciones.geojson'
       - 'data/lotes/**'
+      - 'inventory.php'
       - '.github/workflows/deploy-basemaps-preview.yml'
   workflow_dispatch:
 
@@ -35,7 +36,9 @@ jobs:
         run: |
           set -euo pipefail
           php -l experiments/basemaps-preview/index.php
+          php -l inventory.php
           node --check experiments/basemaps-preview/basemaps-preview.js
+          node --check experiments/basemaps-preview/inventory-preview.js
           node --check experiments/basemaps-preview/lots-preview.js
           test -s experiments/basemaps-preview/basemaps-preview.css
           test -s experiments/basemaps-preview/lots-preview.css
@@ -59,6 +62,7 @@ jobs:
           grep -Fq 'rotationDeg: 5.7' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'flipVertical: true' experiments/basemaps-preview/index.php
           grep -Fq 'SECTION_FILES' experiments/basemaps-preview/lots-preview.js
+          grep -Fq 'JP_SHAREPOINT_INVENTORY' experiments/basemaps-preview/inventory-preview.js
 
       - name: Preparar paquete
         shell: bash
@@ -69,8 +73,10 @@ jobs:
           cp experiments/basemaps-preview/index.php deploy-basemaps-preview/index.php
           cp experiments/basemaps-preview/basemaps-preview.css deploy-basemaps-preview/basemaps-preview.css
           cp experiments/basemaps-preview/basemaps-preview.js deploy-basemaps-preview/basemaps-preview.js
+          cp experiments/basemaps-preview/inventory-preview.js deploy-basemaps-preview/inventory-preview.js
           cp experiments/basemaps-preview/lots-preview.css deploy-basemaps-preview/lots-preview.css
           cp experiments/basemaps-preview/lots-preview.js deploy-basemaps-preview/lots-preview.js
+          cp inventory.php deploy-basemaps-preview/inventory.php
           cp assets/map/base-public.webp deploy-basemaps-preview/base-plan.webp
           cp data/secciones-top.geojson deploy-basemaps-preview/secciones-top.geojson
           cp data/secciones.geojson deploy-basemaps-preview/secciones.geojson
@@ -95,6 +101,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v4.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v5.json
           dry-run: false
           log-level: standard
