@@ -60,7 +60,7 @@ body { background: #eef2f6; }
   right: 18px;
   top: 18px;
   z-index: 8;
-  width: 360px;
+  width: 380px;
   max-height: calc(100% - 36px);
   overflow: auto;
   padding: 18px;
@@ -101,6 +101,17 @@ body { background: #eef2f6; }
 .calibration-actions { display: grid; grid-template-columns: 1fr 1.25fr; gap: 8px; }
 .calibration-actions button { min-height: 38px; border: 1px solid #cdd9e4; border-radius: 10px; background: #fff; color: #173650; font-weight: 750; cursor: pointer; }
 .calibration-actions button.primary { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
+
+.vector-validation { margin-top: 14px; padding: 12px; border: 1px solid #dce5ed; border-radius: 10px; background: rgba(255,255,255,.75); }
+.validation-badge { padding: 3px 6px; border-radius: 999px; background: #eef6ff; color: #1769aa; font-size: 9px; font-weight: 850; }
+.vector-toggle { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 12px; font-weight: 700; color: #425466; }
+.vector-toggle input { accent-color: var(--brand-blue); }
+.vector-toggle span { display: inline-flex; align-items: center; gap: 7px; }
+.vector-swatch { display: inline-block; width: 20px; height: 4px; border-radius: 999px; }
+.section-swatch { background: #0b6ecf; }
+.manzana-swatch { background: #e97716; }
+.vector-validation p { margin: 8px 0 0; font-size: 11px; line-height: 1.4; color: #64748b; }
+
 .calibration-help { margin-top: 13px; padding: 10px; border: 1px solid #e0e7ee; border-radius: 10px; background: rgba(255,255,255,.75); }
 .calibration-help strong { display: block; font-size: 12px; }
 .calibration-help span { display: block; margin-top: 4px; color: #64748b; font-size: 11px; line-height: 1.4; }
@@ -116,5 +127,5 @@ body { background: #eef2f6; }
   .preview-brand p { display: none; }
   .preview-main { height: calc(100vh - 104px); }
   .basemap-switcher { left: 10px; top: 10px; width: 210px; }
-  .preview-panel { right: 10px; top: auto; bottom: 10px; width: min(380px, calc(100vw - 20px)); max-height: 54vh; }
+  .preview-panel { right: 10px; top: auto; bottom: 10px; width: min(390px, calc(100vw - 20px)); max-height: 58vh; }
 }
