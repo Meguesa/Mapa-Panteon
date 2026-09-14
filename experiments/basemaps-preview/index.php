@@ -13,9 +13,10 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Calibración de Mapas Base | Mapa del Panteón</title>
+  <title>Validación geográfica | Mapa del Panteón</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="./basemaps-preview.css?v=9" />
+  <link rel="stylesheet" href="./basemaps-preview.css?v=10" />
+  <link rel="stylesheet" href="./lots-preview.css?v=1" />
 </head>
 <body>
   <header class="preview-header">
@@ -24,9 +25,9 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
         <div class="preview-eyebrow">Portal Interno JdJP · Jardines de Juan Pablo</div>
         <div class="preview-title-row">
           <h1>Mapa del Panteón</h1>
-          <span class="preview-badge">CALIBRACIÓN</span>
+          <span class="preview-badge">PREVIEW</span>
         </div>
-        <p>Preview independiente para alinear el plano JdJP con coordenadas geográficas.</p>
+        <p>Validación geográfica de plano, secciones y lotes. No modifica el mapa productivo.</p>
       </div>
     </div>
 
@@ -37,7 +38,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   </header>
 
   <main class="preview-main">
-    <div id="map" aria-label="Mapa geográfico de calibración"></div>
+    <div id="map" aria-label="Mapa geográfico de validación"></div>
 
     <section class="basemap-switcher" aria-label="Cambiar mapa base">
       <div class="basemap-switcher-title">Visualización</div>
@@ -52,9 +53,9 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
     </section>
 
     <aside class="preview-panel calibration-panel">
-      <div class="preview-panel-tag">ETAPA 2</div>
-      <h2>Calibración del plano</h2>
-      <p>La posición del plano y la transformación vectorial ya están suficientemente alineadas para continuar con manzanas y lotes.</p>
+      <div class="preview-panel-tag">ETAPA 3</div>
+      <h2>Validación de lotes</h2>
+      <p>La transformación geográfica aprobada se aplica ahora directamente a los GeoJSON reales de lotes.</p>
 
       <div class="preview-info-row"><span>Modo</span><strong id="modeLabel">Light</strong></div>
       <div class="preview-info-row"><span>Centro del mapa</span><strong id="centerLabel">25.816327, -100.156123</strong></div>
@@ -92,33 +93,63 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
 
       <div class="vector-validation">
         <div class="calibration-heading"><strong>Ajuste vectorial aprobado</strong><span class="validation-badge">LISTO</span></div>
-
         <label class="vector-toggle"><input id="sectionsVisible" type="checkbox" checked /><span><i class="vector-swatch section-swatch"></i>Secciones azules</span></label>
         <input id="manzanasVisible" type="checkbox" checked hidden />
         <input id="vectorFlipHorizontal" type="checkbox" hidden />
         <input id="vectorFlipVertical" type="checkbox" checked hidden />
-
-        <div class="preview-info-row"><span>Referencia utilizada</span><strong>Secciones azules</strong></div>
-        <div class="preview-info-row"><span>Flip horizontal</span><strong>No</strong></div>
         <div class="preview-info-row"><span>Flip vertical</span><strong>Sí</strong></div>
-        <div class="preview-info-row"><span>Escala</span><strong>100%</strong></div>
-        <div class="preview-info-row"><span>Rotación adicional</span><strong>0°</strong></div>
-        <div class="preview-info-row"><span>Desplazamiento adicional</span><strong>0 m</strong></div>
+        <div class="preview-info-row"><span>Escala / rotación adicional</span><strong>100% / 0°</strong></div>
         <div class="preview-info-row"><span>Vectores cargados</span><strong id="vectorStatus">Cargando…</strong></div>
-
         <input id="vectorRotationRange" type="range" min="-180" max="180" step="0.1" value="0" hidden />
         <span id="vectorRotationValue" hidden>0.0°</span>
         <input id="vectorScaleRange" type="range" min="70" max="130" step="0.1" value="100" hidden />
         <span id="vectorScaleValue" hidden>100.0%</span>
         <button id="resetVectorsBtn" type="button" hidden></button>
         <button id="copyVectorsBtn" type="button" hidden></button>
-
-        <p>La transformación aprobada se utilizará como referencia geográfica para las manzanas y los lotes. Las líneas naranjas de calibración dejan de ser un requisito para continuar.</p>
       </div>
 
-      <div class="calibration-help">
-        <strong>Siguiente etapa</strong>
-        <span>Aplicar esta misma transformación a los GeoJSON de lotes y comprobar su alineación sobre Light y Satélite.</span>
+      <div class="lots-stage">
+        <div class="calibration-heading"><strong>Lotes reales</strong><span class="validation-badge">PRUEBA</span></div>
+
+        <label class="lots-field">
+          <span>Sección</span>
+          <select id="lotSectionSelect">
+            <option value="">Selecciona una sección…</option>
+            <option value="BRONCE">BRONCE</option>
+            <option value="ORO">ORO</option>
+            <option value="PLATA">PLATA</option>
+            <option value="PLATINO">PLATINO</option>
+            <option value="SANJUANVIP">SAN JUAN VIP</option>
+            <option value="SANMATEOVIP">SAN MATEO VIP</option>
+            <option value="SANPEDROVIP">SAN PEDRO VIP</option>
+          </select>
+        </label>
+
+        <label class="lots-field">
+          <span>Manzana</span>
+          <select id="lotManzanaSelect" disabled>
+            <option value="">Todas las manzanas</option>
+          </select>
+        </label>
+
+        <div class="lots-toolbar">
+          <label><input id="lotsVisible" type="checkbox" checked /> Mostrar lotes</label>
+          <label><input id="lotNumbersVisible" type="checkbox" checked /> Numeración</label>
+        </div>
+
+        <div id="lotStatus" class="lots-selected">Selecciona una sección para cargar sus lotes.</div>
+        <div id="lotSelected" class="lots-selected">Selecciona un lote sobre el mapa para verificar posición y datos básicos.</div>
+
+        <div class="lots-legend">
+          <span><i class="lot-available"></i>Disponible</span>
+          <span><i class="lot-separated"></i>Separado</span>
+          <span><i class="lot-sold"></i>Vendido</span>
+          <span><i class="lot-used"></i>Utilizado</span>
+          <span><i class="lot-suspended"></i>Suspendido</span>
+          <span><i class="lot-build"></i>Por construir</span>
+        </div>
+
+        <div class="lots-note">En esta etapa los colores provienen del GeoJSON estático. Después de validar la posición conectaremos nuevamente el inventario de SharePoint.</div>
       </div>
     </aside>
 
@@ -126,23 +157,34 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   </main>
 
   <script>
-    // Calibración vectorial aprobada. Sólo se siembra cuando el navegador no tiene
-    // una calibración previa para esta versión del preview.
     (function () {
-      const key = 'jp-basemap-vector-calibration-v3';
-      if (!localStorage.getItem(key)) {
-        localStorage.setItem(key, JSON.stringify({
-          offsetEastMeters: 0,
-          offsetNorthMeters: 0,
-          scale: 1,
-          rotationDeg: 0,
-          flipHorizontal: false,
-          flipVertical: true
-        }));
-      }
+      // Forzar la calibración vectorial aprobada para que cualquier navegador use
+      // exactamente la misma transformación durante la validación de lotes.
+      localStorage.setItem('jp-basemap-vector-calibration-v3', JSON.stringify({
+        offsetEastMeters: 0,
+        offsetNorthMeters: 0,
+        scale: 1,
+        rotationDeg: 0,
+        flipHorizontal: false,
+        flipVertical: true
+      }));
     })();
   </script>
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="./basemaps-preview.js?v=9"></script>
+  <script>
+    // Captura no invasiva de la instancia que crea el preview base para que el
+    // módulo de lotes pueda reutilizar el mismo mapa sin modificar producción.
+    (function () {
+      const OriginalMap = maplibregl.Map;
+      maplibregl.Map = class JPPreviewMap extends OriginalMap {
+        constructor(options) {
+          super(options);
+          window.JP_BASEMAP_MAP = this;
+        }
+      };
+    })();
+  </script>
+  <script src="./basemaps-preview.js?v=10"></script>
+  <script src="./lots-preview.js?v=1"></script>
 </body>
 </html>
