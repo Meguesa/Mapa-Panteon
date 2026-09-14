@@ -6,6 +6,7 @@ on:
       - preview/map-basemaps
     paths:
       - 'experiments/basemaps-preview/**'
+      - 'assets/map/base-public.webp'
       - '.github/workflows/deploy-basemaps-preview.yml'
   workflow_dispatch:
 
@@ -33,10 +34,13 @@ jobs:
           php -l experiments/basemaps-preview/index.php
           node --check experiments/basemaps-preview/basemaps-preview.js
           test -s experiments/basemaps-preview/basemaps-preview.css
+          test -s assets/map/base-public.webp
           grep -Fq 'OpenFreeMap Positron' experiments/basemaps-preview/index.php
           grep -Fq 'Esri World Imagery' experiments/basemaps-preview/index.php
           grep -Fq 'tiles.openfreemap.org/styles/positron' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'World_Imagery/MapServer/tile' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'PLAN_IMAGE_URL' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'SATELLITE_CLEAR_MAX_ZOOM = 18.45' experiments/basemaps-preview/basemaps-preview.js
 
       - name: Preparar paquete
         shell: bash
@@ -47,6 +51,7 @@ jobs:
           cp experiments/basemaps-preview/index.php deploy-basemaps-preview/index.php
           cp experiments/basemaps-preview/basemaps-preview.css deploy-basemaps-preview/basemaps-preview.css
           cp experiments/basemaps-preview/basemaps-preview.js deploy-basemaps-preview/basemaps-preview.js
+          cp assets/map/base-public.webp deploy-basemaps-preview/base-plan.webp
           du -sh deploy-basemaps-preview
 
       - name: Publicar preview en cPanel
@@ -61,6 +66,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v1.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v2.json
           dry-run: false
           log-level: standard
