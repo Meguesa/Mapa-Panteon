@@ -67,6 +67,12 @@ jobs:
             tools/apply_nichos_v2_production.py
           python3 tools/build_portal_map.py
           python3 tools/apply_nichos_v2_production.py
+
+          # Produccion usa la sesion PHP del Portal para consultar SharePoint.
+          # Sustituimos el cliente MSAL generado por el builder y agregamos el endpoint PHP.
+          cp src/js/sharepoint-inventario-portal.js deploy/sharepoint-inventario.js
+          cp inventory.php deploy/inventory.php
+
           mkdir -p deploy/vendor
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
           rm -rf .tmp-msal
@@ -78,6 +84,7 @@ jobs:
 
           required_files=(
             deploy/index.php
+            deploy/inventory.php
             deploy/app.js
             deploy/styles.css
             deploy/sharepoint-inventario.js
@@ -136,6 +143,7 @@ jobs:
           fi
 
           php -l deploy/index.php
+          php -l deploy/inventory.php
           node --check deploy/app.js
           node --check deploy/public-ui-fixes.js
           node --check deploy/lotes-nv2-match.js
@@ -151,13 +159,11 @@ jobs:
             if ! grep -Fq "$needle" "$file"; then
               echo "::error::$label no encontrado en $file: $needle"
               echo "--- Referencias relevantes de $file ---"
-              grep -nE 'lotes-nv2|nichos-v2|performance-optimizations|section-visual|jp-inventory|SPN-concavo|PREVIEW_ROOT' "$file" || true
+              grep -nE 'lotes-nv2|nichos-v2|performance-optimizations|section-visual|jp-inventory|SPN-concavo|PREVIEW_ROOT|inventory.php|portal-session' "$file" || true
               exit 1
             fi
           }
 
-          # Validamos presencia y funcionalidad, no numeros de cache-busting.
-          # Las versiones ?v= pueden cambiar independientemente del contrato funcional.
           require_contains deploy/index.php 'Mapa del Panteón' 'Titulo del mapa'
           require_contains deploy/index.php 'portal_require_authentication' 'Autenticacion del portal'
           require_contains deploy/index.php 'section-visual-references.js' 'Referencias visuales'
@@ -174,7 +180,11 @@ jobs:
           require_contains deploy/nichos-v2-preview.js 'function fitWholeImage' 'Ajuste inicial de imagen de nichos'
           require_contains deploy/lotes-nv2-match.js 'syncLotInteractivity' 'Interactividad de lotes'
           require_contains deploy/lotes-nv2-match.js 'seleccion por clic habilitada' 'Seleccion de lotes'
-          require_contains deploy/sharepoint-inventario.js 'jp-inventory-updated' 'Actualizacion asincrona de inventario'
+          require_contains deploy/sharepoint-inventario.js './inventory.php' 'Endpoint autenticado del inventario'
+          require_contains deploy/sharepoint-inventario.js 'portal-session' 'Sesion unica del Portal'
+          require_contains deploy/sharepoint-inventario.js 'jp-inventory-updated' 'Evento de inventario'
+          require_contains deploy/inventory.php 'portal_require_authentication' 'Proteccion del endpoint de inventario'
+          require_contains deploy/inventory.php 'portal_graph_app_token' 'Consulta de SharePoint desde backend'
 
           python3 - <<'PY'
           import json
@@ -221,6 +231,7 @@ jobs:
 
           for file in \
             index.php \
+            inventory.php \
             app.js \
             styles.css \
             portal-integration.css \
