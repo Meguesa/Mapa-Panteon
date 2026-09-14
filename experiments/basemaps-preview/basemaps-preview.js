@@ -11,6 +11,7 @@
   const SECTIONS_URL = './secciones-top.geojson';
   const MANZANAS_URL = './secciones.geojson';
   const CALIBRATION_KEY = 'jp-basemap-calibration-v2';
+  const VECTOR_CALIBRATION_KEY = 'jp-basemap-vector-calibration-v1';
 
   function rasterStyle(id, url, maxzoom, attribution) {
     return {
@@ -54,6 +55,13 @@
     visible: true
   };
 
+  const DEFAULT_VECTOR_CALIBRATION = {
+    offsetEastMeters: 0,
+    offsetNorthMeters: 0,
+    scale: 1,
+    rotationDeg: 0
+  };
+
   const status = document.getElementById('mapStatus');
   const modeLabel = document.getElementById('modeLabel');
   const centerLabel = document.getElementById('centerLabel');
@@ -71,14 +79,24 @@
   const resetCalibrationBtn = document.getElementById('resetCalibrationBtn');
   const copyCalibrationBtn = document.getElementById('copyCalibrationBtn');
   const useMapCenterBtn = document.getElementById('useMapCenterBtn');
+
   const sectionsVisible = document.getElementById('sectionsVisible');
   const manzanasVisible = document.getElementById('manzanasVisible');
+  const vectorStatus = document.getElementById('vectorStatus');
+  const vectorRotationRange = document.getElementById('vectorRotationRange');
+  const vectorRotationValue = document.getElementById('vectorRotationValue');
+  const vectorScaleRange = document.getElementById('vectorScaleRange');
+  const vectorScaleValue = document.getElementById('vectorScaleValue');
+  const resetVectorsBtn = document.getElementById('resetVectorsBtn');
+  const copyVectorsBtn = document.getElementById('copyVectorsBtn');
 
   let currentBasemap = 'light';
   let statusTimer = null;
   let calibration = loadCalibration();
+  let vectorCalibration = loadVectorCalibration();
   let sectionsRaw = null;
   let manzanasRaw = null;
+  let normalizedManzanas = null;
 
   function loadCalibration() {
     try {
@@ -90,8 +108,22 @@
     return Object.assign({}, DEFAULT_CALIBRATION);
   }
 
+  function loadVectorCalibration() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(VECTOR_CALIBRATION_KEY) || 'null');
+      if (saved && Number.isFinite(saved.scale) && Number.isFinite(saved.rotationDeg)) {
+        return Object.assign({}, DEFAULT_VECTOR_CALIBRATION, saved);
+      }
+    } catch (_) {}
+    return Object.assign({}, DEFAULT_VECTOR_CALIBRATION);
+  }
+
   function saveCalibration() {
     localStorage.setItem(CALIBRATION_KEY, JSON.stringify(calibration));
+  }
+
+  function saveVectorCalibration() {
+    localStorage.setItem(VECTOR_CALIBRATION_KEY, JSON.stringify(vectorCalibration));
   }
 
   function setStatus(text, hideAfterMs) {
@@ -123,8 +155,8 @@
 
   function updateLocationReadout() {
     const center = map.getCenter();
-    centerLabel.textContent = `${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}`;
-    zoomLabel.textContent = map.getZoom().toFixed(1);
+    if (centerLabel) centerLabel.textContent = `${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}`;
+    if (zoomLabel) zoomLabel.textContent = map.getZoom().toFixed(1);
   }
 
   function metersToLng(meters, latitude) {
@@ -135,41 +167,71 @@
     return meters / 110540;
   }
 
-  function transformPoint(point) {
+  function sourcePointToMeters(point) {
     const x = Number(point[0]);
     const y = Number(point[1]);
     const heightMeters = calibration.widthMeters / PLAN_ASPECT;
-    const east0 = ((x / DATA_WIDTH) - 0.5) * calibration.widthMeters;
-    const north0 = (0.5 - (y / DATA_HEIGHT)) * heightMeters;
-    const angle = calibration.rotationDeg * Math.PI / 180;
+    return {
+      east: ((x / DATA_WIDTH) - 0.5) * calibration.widthMeters,
+      north: (0.5 - (y / DATA_HEIGHT)) * heightMeters
+    };
+  }
+
+  function rotateMeters(east, north, angleDeg) {
+    const angle = angleDeg * Math.PI / 180;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const east = east0 * cos + north0 * sin;
-    const north = -east0 * sin + north0 * cos;
+    return {
+      east: east * cos + north * sin,
+      north: -east * sin + north * cos
+    };
+  }
+
+  function metersToLngLat(east, north) {
     return [
       calibration.lng + metersToLng(east, calibration.lat),
       calibration.lat + metersToLat(north)
     ];
   }
 
+  function transformPoint(point, includeVectorAdjustment) {
+    const base = sourcePointToMeters(point);
+    const planRotated = rotateMeters(base.east, base.north, calibration.rotationDeg);
+
+    let east = planRotated.east;
+    let north = planRotated.north;
+
+    if (includeVectorAdjustment) {
+      east *= vectorCalibration.scale;
+      north *= vectorCalibration.scale;
+      const adjusted = rotateMeters(east, north, vectorCalibration.rotationDeg);
+      east = adjusted.east + vectorCalibration.offsetEastMeters;
+      north = adjusted.north + vectorCalibration.offsetNorthMeters;
+    }
+
+    return metersToLngLat(east, north);
+  }
+
   function planCoordinates() {
     return [
-      transformPoint([0, 0]),
-      transformPoint([DATA_WIDTH, 0]),
-      transformPoint([DATA_WIDTH, DATA_HEIGHT]),
-      transformPoint([0, DATA_HEIGHT])
+      transformPoint([0, 0], false),
+      transformPoint([DATA_WIDTH, 0], false),
+      transformPoint([DATA_WIDTH, DATA_HEIGHT], false),
+      transformPoint([0, DATA_HEIGHT], false)
     ];
   }
 
-  function transformCoordinates(coords) {
+  function transformCoordinates(coords, includeVectorAdjustment) {
     if (!Array.isArray(coords)) return coords;
     if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
-      return transformPoint(coords);
+      return transformPoint(coords, includeVectorAdjustment);
     }
-    return coords.map(transformCoordinates);
+    return coords.map(function (child) {
+      return transformCoordinates(child, includeVectorAdjustment);
+    });
   }
 
-  function transformGeoJSON(data) {
+  function transformGeoJSON(data, includeVectorAdjustment) {
     return {
       type: 'FeatureCollection',
       features: (data && Array.isArray(data.features) ? data.features : []).map(function (feature) {
@@ -179,7 +241,7 @@
           properties: Object.assign({}, feature.properties || {}),
           geometry: feature.geometry ? {
             type: feature.geometry.type,
-            coordinates: transformCoordinates(feature.geometry.coordinates)
+            coordinates: transformCoordinates(feature.geometry.coordinates, includeVectorAdjustment)
           } : null
         };
       })
@@ -189,13 +251,13 @@
   function circlePointToPolygon(feature, steps) {
     if (!feature || !feature.geometry || feature.geometry.type !== 'Point') return feature;
     const radius = Number(feature.properties && feature.properties.radius);
-    if (!Number.isFinite(radius) || radius <= 0) return feature;
+    if (!Number.isFinite(radius) || radius <= 0) return null;
 
     const center = feature.geometry.coordinates;
     const cx = Number(center[0]);
     const cy = Number(center[1]);
     const ring = [];
-    const total = Math.max(24, Number(steps) || 48);
+    const total = Math.max(24, Number(steps) || 56);
 
     for (let i = 0; i <= total; i += 1) {
       const angle = (Math.PI * 2 * i) / total;
@@ -209,64 +271,57 @@
       type: 'Feature',
       id: feature.id,
       properties: Object.assign({}, feature.properties || {}, { sourceGeometry: 'point-radius' }),
-      geometry: {
-        type: 'Polygon',
-        coordinates: [ring]
-      }
+      geometry: { type: 'Polygon', coordinates: [ring] }
     };
   }
 
   function normalizeManzanasGeoJSON(data) {
     const features = data && Array.isArray(data.features) ? data.features : [];
     const normalized = [];
-    let convertedCircles = 0;
-    let polygons = 0;
-    let skippedPoints = 0;
 
     features.forEach(function (feature) {
       if (!feature || !feature.geometry) return;
-
       if (feature.geometry.type === 'Point') {
         const converted = circlePointToPolygon(feature, 56);
-        if (converted.geometry && converted.geometry.type === 'Polygon') {
-          normalized.push(converted);
-          convertedCircles += 1;
-        } else {
-          skippedPoints += 1;
-        }
+        if (converted) normalized.push(converted);
         return;
       }
-
       if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
         normalized.push(feature);
-        polygons += 1;
       }
     });
 
-    console.info('[Calibration] manzanas normalizadas', {
-      totalOriginal: features.length,
-      totalAreas: normalized.length,
-      circulosConvertidos: convertedCircles,
-      poligonos: polygons,
-      puntosSinArea: skippedPoints
-    });
-
-    return {
-      type: 'FeatureCollection',
-      features: normalized
-    };
+    return { type: 'FeatureCollection', features: normalized };
   }
 
   function syncCalibrationUi() {
-    opacityRange.value = String(Math.round(calibration.opacity * 100));
-    opacityValue.textContent = `${Math.round(calibration.opacity * 100)}%`;
-    rotationRange.value = String(calibration.rotationDeg);
-    rotationValue.textContent = `${calibration.rotationDeg.toFixed(1)}°`;
-    widthRange.value = String(Math.round(calibration.widthMeters));
-    widthValue.textContent = `${Math.round(calibration.widthMeters)} m`;
-    planVisible.checked = Boolean(calibration.visible);
-    planLatValue.textContent = calibration.lat.toFixed(6);
-    planLngValue.textContent = calibration.lng.toFixed(6);
+    if (opacityRange) opacityRange.value = String(Math.round(calibration.opacity * 100));
+    if (opacityValue) opacityValue.textContent = `${Math.round(calibration.opacity * 100)}%`;
+    if (rotationRange) rotationRange.value = String(calibration.rotationDeg);
+    if (rotationValue) rotationValue.textContent = `${calibration.rotationDeg.toFixed(1)}°`;
+    if (widthRange) widthRange.value = String(Math.round(calibration.widthMeters));
+    if (widthValue) widthValue.textContent = `${Math.round(calibration.widthMeters)} m`;
+    if (planVisible) planVisible.checked = Boolean(calibration.visible);
+    if (planLatValue) planLatValue.textContent = calibration.lat.toFixed(6);
+    if (planLngValue) planLngValue.textContent = calibration.lng.toFixed(6);
+  }
+
+  function syncVectorUi() {
+    if (vectorRotationRange) vectorRotationRange.value = String(vectorCalibration.rotationDeg);
+    if (vectorRotationValue) vectorRotationValue.textContent = `${vectorCalibration.rotationDeg.toFixed(1)}°`;
+    if (vectorScaleRange) vectorScaleRange.value = String(vectorCalibration.scale * 100);
+    if (vectorScaleValue) vectorScaleValue.textContent = `${(vectorCalibration.scale * 100).toFixed(1)}%`;
+  }
+
+  function updateVectorStatus() {
+    if (!vectorStatus) return;
+    if (!sectionsRaw || !normalizedManzanas) {
+      vectorStatus.textContent = 'Cargando…';
+      return;
+    }
+    const sectionCount = Array.isArray(sectionsRaw.features) ? sectionsRaw.features.length : 0;
+    const manzanaCount = Array.isArray(normalizedManzanas.features) ? normalizedManzanas.features.length : 0;
+    vectorStatus.textContent = `${sectionCount} secciones · ${manzanaCount} manzanas`;
   }
 
   function addOrUpdatePlanOverlay() {
@@ -298,74 +353,70 @@
     }
   }
 
-  function ensureVectorLayer(sourceId, layerId, data, color, width, visible) {
-    if (!map.isStyleLoaded() || !data) return;
-    const transformed = transformGeoJSON(data);
+  function ensureSectionsLayer() {
+    if (!map.isStyleLoaded() || !sectionsRaw) return;
+    const transformed = transformGeoJSON(sectionsRaw, true);
+    const sourceId = 'jdjp-sections';
+    const layerId = 'jdjp-sections-line';
     const source = map.getSource(sourceId);
+
     if (!source) {
       map.addSource(sourceId, { type: 'geojson', data: transformed });
       map.addLayer({
         id: layerId,
         type: 'line',
         source: sourceId,
-        layout: { visibility: visible ? 'visible' : 'none' },
+        layout: { visibility: sectionsVisible && sectionsVisible.checked ? 'visible' : 'none' },
         paint: {
-          'line-color': color,
-          'line-width': width,
+          'line-color': '#006cff',
+          'line-width': 3.2,
           'line-opacity': 0.95
         }
       });
     } else {
       source.setData(transformed);
       if (map.getLayer(layerId)) {
-        map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+        map.setLayoutProperty(layerId, 'visibility', sectionsVisible && sectionsVisible.checked ? 'visible' : 'none');
       }
     }
   }
 
-  function ensureManzanaLayers(data, visible) {
-    if (!map.isStyleLoaded() || !data) return;
-
-    const normalized = normalizeManzanasGeoJSON(data);
-    const transformed = transformGeoJSON(normalized);
+  function ensureManzanaLayers() {
+    if (!map.isStyleLoaded() || !normalizedManzanas) return;
+    const transformed = transformGeoJSON(normalizedManzanas, true);
     const sourceId = 'jdjp-manzanas';
     const fillLayerId = 'jdjp-manzanas-fill';
     const lineLayerId = 'jdjp-manzanas-line';
+    const visible = manzanasVisible && manzanasVisible.checked;
     const source = map.getSource(sourceId);
 
     if (!source) {
       map.addSource(sourceId, { type: 'geojson', data: transformed });
-
       map.addLayer({
         id: fillLayerId,
         type: 'fill',
         source: sourceId,
         layout: { visibility: visible ? 'visible' : 'none' },
         paint: {
-          'fill-color': '#f59e0b',
-          'fill-opacity': 0.10
+          'fill-color': '#ff8a00',
+          'fill-opacity': 0.20
         }
       });
-
       map.addLayer({
         id: lineLayerId,
         type: 'line',
         source: sourceId,
         layout: { visibility: visible ? 'visible' : 'none' },
         paint: {
-          'line-color': '#ff7a00',
-          'line-width': 3.2,
+          'line-color': '#ff5a00',
+          'line-width': 4.2,
           'line-opacity': 1
         }
       });
     } else {
       source.setData(transformed);
-      if (map.getLayer(fillLayerId)) {
-        map.setLayoutProperty(fillLayerId, 'visibility', visible ? 'visible' : 'none');
-      }
-      if (map.getLayer(lineLayerId)) {
-        map.setLayoutProperty(lineLayerId, 'visibility', visible ? 'visible' : 'none');
-      }
+      if (map.getLayer(fillLayerId)) map.setLayoutProperty(fillLayerId, 'visibility', visible ? 'visible' : 'none');
+      if (map.getLayer(lineLayerId)) map.setLayoutProperty(lineLayerId, 'visibility', visible ? 'visible' : 'none');
     }
 
     try {
@@ -375,8 +426,9 @@
   }
 
   function addOrUpdateVectorOverlays() {
-    ensureVectorLayer('jdjp-sections', 'jdjp-sections-line', sectionsRaw, '#0b6ecf', 2.5, sectionsVisible.checked);
-    ensureManzanaLayers(manzanasRaw, manzanasVisible.checked);
+    ensureSectionsLayer();
+    ensureManzanaLayers();
+    updateVectorStatus();
   }
 
   function markParkReference() {
@@ -434,7 +486,7 @@
     currentBasemap = key;
     setStatus(`Cargando ${labels[key]}…`, 0);
     map.setStyle(styles[key], { diff: false });
-    modeLabel.textContent = labels[key];
+    if (modeLabel) modeLabel.textContent = labels[key];
     localStorage.setItem('jp-basemap-preview', key);
     setActiveButton(key);
     map.once('styledata', restorePreviewLayers);
@@ -449,12 +501,7 @@
     if (key === 'satellite' && map.getZoom() > SATELLITE_CLEAR_MAX_ZOOM) {
       const message = satelliteResolutionMessage();
       if (currentBasemap !== 'light') applyBasemap('light', { notice: message });
-      else {
-        setActiveButton('light');
-        modeLabel.textContent = labels.light;
-        localStorage.setItem('jp-basemap-preview', 'light');
-        setStatus(message, 5200);
-      }
+      else setStatus(message, 5200);
       return;
     }
     applyBasemap(key);
@@ -467,7 +514,13 @@
     addOrUpdateVectorOverlays();
   }
 
-  function nudge(direction) {
+  function updateVectorCalibration() {
+    saveVectorCalibration();
+    syncVectorUi();
+    addOrUpdateVectorOverlays();
+  }
+
+  function nudgePlan(direction) {
     const step = 5;
     if (direction === 'north') calibration.lat += metersToLat(step);
     if (direction === 'south') calibration.lat -= metersToLat(step);
@@ -476,33 +529,56 @@
     updateCalibration();
   }
 
-  opacityRange.addEventListener('input', function () {
+  function nudgeVectors(direction) {
+    const step = 2;
+    if (direction === 'north') vectorCalibration.offsetNorthMeters += step;
+    if (direction === 'south') vectorCalibration.offsetNorthMeters -= step;
+    if (direction === 'east') vectorCalibration.offsetEastMeters += step;
+    if (direction === 'west') vectorCalibration.offsetEastMeters -= step;
+    updateVectorCalibration();
+  }
+
+  if (opacityRange) opacityRange.addEventListener('input', function () {
     calibration.opacity = Number(opacityRange.value) / 100;
     updateCalibration();
   });
-  rotationRange.addEventListener('input', function () {
+  if (rotationRange) rotationRange.addEventListener('input', function () {
     calibration.rotationDeg = Number(rotationRange.value);
     updateCalibration();
   });
-  widthRange.addEventListener('input', function () {
+  if (widthRange) widthRange.addEventListener('input', function () {
     calibration.widthMeters = Number(widthRange.value);
     updateCalibration();
   });
-  planVisible.addEventListener('change', function () {
+  if (planVisible) planVisible.addEventListener('change', function () {
     calibration.visible = planVisible.checked;
     updateCalibration();
   });
-  sectionsVisible.addEventListener('change', addOrUpdateVectorOverlays);
-  manzanasVisible.addEventListener('change', addOrUpdateVectorOverlays);
+  if (sectionsVisible) sectionsVisible.addEventListener('change', addOrUpdateVectorOverlays);
+  if (manzanasVisible) manzanasVisible.addEventListener('change', addOrUpdateVectorOverlays);
+
+  if (vectorRotationRange) vectorRotationRange.addEventListener('input', function () {
+    vectorCalibration.rotationDeg = Number(vectorRotationRange.value);
+    updateVectorCalibration();
+  });
+  if (vectorScaleRange) vectorScaleRange.addEventListener('input', function () {
+    vectorCalibration.scale = Number(vectorScaleRange.value) / 100;
+    updateVectorCalibration();
+  });
 
   document.querySelectorAll('[data-nudge]').forEach(function (button) {
     const direction = button.dataset.nudge;
     if (['north', 'south', 'east', 'west'].includes(direction)) {
-      button.addEventListener('click', function () { nudge(direction); });
+      button.addEventListener('click', function () { nudgePlan(direction); });
     }
   });
 
-  useMapCenterBtn.addEventListener('click', function () {
+  document.querySelectorAll('[data-vector-nudge]').forEach(function (button) {
+    const direction = button.dataset.vectorNudge;
+    button.addEventListener('click', function () { nudgeVectors(direction); });
+  });
+
+  if (useMapCenterBtn) useMapCenterBtn.addEventListener('click', function () {
     const center = map.getCenter();
     calibration.lat = center.lat;
     calibration.lng = center.lng;
@@ -510,20 +586,37 @@
     setStatus('Centro del plano actualizado con el centro visible del mapa.', 2200);
   });
 
-  resetCalibrationBtn.addEventListener('click', function () {
+  if (resetCalibrationBtn) resetCalibrationBtn.addEventListener('click', function () {
     calibration = Object.assign({}, DEFAULT_CALIBRATION);
     updateCalibration();
-    setStatus('Se restauraron los valores aprobados.', 1800);
+    setStatus('Se restauraron los valores aprobados del plano.', 1800);
   });
 
-  copyCalibrationBtn.addEventListener('click', async function () {
+  if (resetVectorsBtn) resetVectorsBtn.addEventListener('click', function () {
+    vectorCalibration = Object.assign({}, DEFAULT_VECTOR_CALIBRATION);
+    updateVectorCalibration();
+    setStatus('Se restableció el ajuste independiente de líneas.', 1800);
+  });
+
+  if (copyCalibrationBtn) copyCalibrationBtn.addEventListener('click', async function () {
     const payload = JSON.stringify(calibration, null, 2);
     try {
       await navigator.clipboard.writeText(payload);
-      setStatus('Calibración copiada al portapapeles.', 2400);
+      setStatus('Calibración del plano copiada.', 2200);
     } catch (_) {
-      console.info('[Calibration]', payload);
-      setStatus('No se pudo copiar automáticamente. La calibración quedó en la consola.', 4200);
+      console.info('[Calibration plano]', payload);
+      setStatus('La calibración del plano quedó en la consola.', 3200);
+    }
+  });
+
+  if (copyVectorsBtn) copyVectorsBtn.addEventListener('click', async function () {
+    const payload = JSON.stringify(vectorCalibration, null, 2);
+    try {
+      await navigator.clipboard.writeText(payload);
+      setStatus('Ajuste de líneas copiado.', 2200);
+    } catch (_) {
+      console.info('[Calibration vectores]', payload);
+      setStatus('El ajuste de líneas quedó en la consola.', 3200);
     }
   });
 
@@ -532,20 +625,32 @@
   });
 
   syncCalibrationUi();
+  syncVectorUi();
+  updateVectorStatus();
 
   Promise.all([
-    fetch(SECTIONS_URL, { cache: 'no-store' }).then((r) => r.json()),
-    fetch(MANZANAS_URL, { cache: 'no-store' }).then((r) => r.json())
+    fetch(SECTIONS_URL, { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error(`Secciones HTTP ${r.status}`);
+      return r.json();
+    }),
+    fetch(MANZANAS_URL, { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error(`Manzanas HTTP ${r.status}`);
+      return r.json();
+    })
   ]).then(function (results) {
     sectionsRaw = results[0];
     manzanasRaw = results[1];
+    normalizedManzanas = normalizeManzanasGeoJSON(manzanasRaw);
+    updateVectorStatus();
     restorePreviewLayers();
-    console.info('[Calibration] vectores cargados', {
+    console.info('[Calibration] vectores listos', {
       secciones: sectionsRaw.features ? sectionsRaw.features.length : 0,
-      manzanas: manzanasRaw.features ? manzanasRaw.features.length : 0
+      manzanasOriginales: manzanasRaw.features ? manzanasRaw.features.length : 0,
+      manzanasRenderizadas: normalizedManzanas.features ? normalizedManzanas.features.length : 0
     });
   }).catch(function (error) {
-    console.error('[Calibration] No fue posible cargar los GeoJSON de validación.', error);
+    console.error('[Calibration] No fue posible cargar los GeoJSON.', error);
+    if (vectorStatus) vectorStatus.textContent = 'ERROR';
     setStatus('No fue posible cargar secciones/manzanas para validar la calibración.', 5200);
   });
 
@@ -571,6 +676,5 @@
 
   map.on('error', function (event) {
     console.error('[Basemaps Preview]', event && event.error ? event.error : event);
-    setStatus('No se pudo cargar una parte del mapa. Revisa la consola.', 0);
   });
 })();
