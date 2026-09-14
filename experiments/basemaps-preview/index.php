@@ -15,7 +15,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Calibración de Mapas Base | Mapa del Panteón</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="./basemaps-preview.css?v=5" />
+  <link rel="stylesheet" href="./basemaps-preview.css?v=6" />
 </head>
 <body>
   <header class="preview-header">
@@ -55,8 +55,8 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
       <div class="preview-panel-tag">ETAPA 2</div>
       <h2>Calibración del plano</h2>
       <p>
-        La calibración inicial ya usa los valores aprobados. Ajusta sólo si detectas una diferencia al comparar
-        calles, glorietas y construcciones con el fondo geográfico.
+        Primero se calibra la imagen del plano. Después puedes ajustar de forma independiente las líneas
+        azules/naranjas sin mover la imagen.
       </p>
 
       <div class="preview-info-row"><span>Modo</span><strong id="modeLabel">Light</strong></div>
@@ -109,27 +109,53 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
 
       <div class="vector-validation">
         <div class="calibration-heading">
-          <strong>Validación vectorial</strong>
-          <span class="validation-badge">NUEVO</span>
+          <strong>Ajuste de líneas</strong>
+          <span class="validation-badge">INDEPENDIENTE</span>
         </div>
+
         <label class="vector-toggle">
           <input id="sectionsVisible" type="checkbox" checked />
-          <span><i class="vector-swatch section-swatch"></i>Secciones</span>
+          <span><i class="vector-swatch section-swatch"></i>Secciones azules</span>
         </label>
         <label class="vector-toggle">
           <input id="manzanasVisible" type="checkbox" checked />
-          <span><i class="vector-swatch manzana-swatch"></i>Manzanas</span>
+          <span><i class="vector-swatch manzana-swatch"></i>Manzanas naranjas</span>
         </label>
+
+        <div class="preview-info-row"><span>Vectores cargados</span><strong id="vectorStatus">Cargando…</strong></div>
+
+        <label class="calibration-control">
+          <span>Rotación líneas <strong id="vectorRotationValue">0.0°</strong></span>
+          <input id="vectorRotationRange" type="range" min="-20" max="20" step="0.1" value="0" />
+        </label>
+
+        <label class="calibration-control">
+          <span>Escala líneas <strong id="vectorScaleValue">100.0%</strong></span>
+          <input id="vectorScaleRange" type="range" min="80" max="120" step="0.1" value="100" />
+        </label>
+
+        <div class="nudge-label">Mover líneas <span>(2 m por clic)</span></div>
+        <div class="nudge-grid" aria-label="Mover líneas">
+          <button type="button" data-vector-nudge="north" title="Mover líneas al norte">↑</button>
+          <button type="button" data-vector-nudge="west" title="Mover líneas al oeste">←</button>
+          <button type="button" id="resetVectorsBtn" title="Restablecer ajuste de líneas">◎</button>
+          <button type="button" data-vector-nudge="east" title="Mover líneas al este">→</button>
+          <button type="button" data-vector-nudge="south" title="Mover líneas al sur">↓</button>
+        </div>
+
+        <div class="calibration-actions">
+          <button id="copyVectorsBtn" type="button" class="primary">Copiar ajuste de líneas</button>
+        </div>
+
         <p>
-          Estas líneas se calculan con la misma transformación del plano. Si coinciden con el satélite,
-          la calibración ya puede aplicarse después a los lotes.
+          Estos controles mueven únicamente las líneas vectoriales. La imagen semitransparente del plano no cambia.
         </p>
       </div>
 
       <div class="calibration-help">
         <strong>Qué revisar ahora</strong>
-        <span>Las líneas azules de secciones y las líneas naranjas de manzanas deben mantener la misma posición y ángulo que el plano.</span>
-        <span>Compara especialmente glorietas, curvas y extremos de los bloques.</span>
+        <span>1. Alinea primero las líneas azules con los límites del plano usando rotación, escala y flechas.</span>
+        <span>2. Las manzanas naranjas deben aparecer encima del plano. Si coinciden, utilizaremos este mismo ajuste para los lotes.</span>
       </div>
     </aside>
 
@@ -137,6 +163,6 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   </main>
 
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="./basemaps-preview.js?v=5"></script>
+  <script src="./basemaps-preview.js?v=6"></script>
 </body>
 </html>
