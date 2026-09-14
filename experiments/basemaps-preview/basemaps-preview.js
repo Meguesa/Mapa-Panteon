@@ -4,44 +4,53 @@
   const CENTER = [-100.15610, 25.81662];
   const START_ZOOM = 16.4;
 
-  const styles = {
-    light: 'https://tiles.openfreemap.org/styles/positron',
-    standard: 'https://tiles.openfreemap.org/styles/liberty',
-    satellite: {
+  function rasterStyle(id, url, maxzoom, attribution) {
+    return {
       version: 8,
       sources: {
-        esri: {
+        [id]: {
           type: 'raster',
-          tiles: [
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-          ],
+          tiles: [url],
           tileSize: 256,
-          // En esta zona Esri devuelve mosaicos grises "Map data not yet available"
-          // a partir del siguiente nivel nativo. Limitamos la fuente a z18 y
-          // dejamos que MapLibre amplie ese ultimo mosaico disponible cuando el
-          // usuario siga acercando el mapa. Asi conservamos el zoom sin pedir
-          // tiles inexistentes a Esri.
-          maxzoom: 18,
-          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+          maxzoom: maxzoom,
+          attribution: attribution
         }
       },
       layers: [
         {
-          id: 'esri-satellite',
+          id: `${id}-layer`,
           type: 'raster',
-          source: 'esri',
+          source: id,
           paint: {
             'raster-resampling': 'linear'
           }
         }
       ]
-    }
+    };
+  }
+
+  const styles = {
+    light: 'https://tiles.openfreemap.org/styles/positron',
+    standard: 'https://tiles.openfreemap.org/styles/liberty',
+    satellite: rasterStyle(
+      'esri-world-imagery',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      18,
+      'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+    ),
+    satelliteClarity: rasterStyle(
+      'esri-world-imagery-clarity',
+      'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      19,
+      'Tiles &copy; Esri &mdash; World Imagery (Clarity)'
+    )
   };
 
   const labels = {
     light: 'Light',
     standard: 'OpenStreetMap',
-    satellite: 'Satélite'
+    satellite: 'Satélite',
+    satelliteClarity: 'Satélite Clarity'
   };
 
   const status = document.getElementById('mapStatus');
