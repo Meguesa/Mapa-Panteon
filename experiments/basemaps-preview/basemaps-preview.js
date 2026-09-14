@@ -11,37 +11,30 @@
   const SECTIONS_URL = './secciones-top.geojson';
   const MANZANAS_URL = './secciones.geojson';
   const CALIBRATION_KEY = 'jp-basemap-calibration-v2';
-  const VECTOR_CALIBRATION_KEY = 'jp-basemap-vector-calibration-v1';
-
-  function rasterStyle(id, url, maxzoom, attribution) {
-    return {
-      version: 8,
-      sources: {
-        [id]: {
-          type: 'raster',
-          tiles: [url],
-          tileSize: 256,
-          maxzoom: maxzoom,
-          attribution: attribution
-        }
-      },
-      layers: [{
-        id: `${id}-layer`,
-        type: 'raster',
-        source: id,
-        paint: { 'raster-resampling': 'linear' }
-      }]
-    };
-  }
+  const VECTOR_CALIBRATION_KEY = 'jp-basemap-vector-calibration-v2';
 
   const styles = {
     light: 'https://tiles.openfreemap.org/styles/positron',
-    satellite: rasterStyle(
-      'esri-world-imagery',
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      18,
-      'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
-    )
+    satellite: {
+      version: 8,
+      sources: {
+        'esri-world-imagery': {
+          type: 'raster',
+          tiles: [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+          ],
+          tileSize: 256,
+          maxzoom: 18,
+          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+        }
+      },
+      layers: [{
+        id: 'esri-world-imagery-layer',
+        type: 'raster',
+        source: 'esri-world-imagery',
+        paint: { 'raster-resampling': 'linear' }
+      }]
+    }
   };
 
   const labels = { light: 'Light', satellite: 'Satélite' };
@@ -59,36 +52,40 @@
     offsetEastMeters: 0,
     offsetNorthMeters: 0,
     scale: 1,
-    rotationDeg: 0
+    rotationDeg: 0,
+    flipHorizontal: false
   };
 
-  const status = document.getElementById('mapStatus');
-  const modeLabel = document.getElementById('modeLabel');
-  const centerLabel = document.getElementById('centerLabel');
-  const zoomLabel = document.getElementById('zoomLabel');
+  const $ = (id) => document.getElementById(id);
 
-  const opacityRange = document.getElementById('opacityRange');
-  const opacityValue = document.getElementById('opacityValue');
-  const rotationRange = document.getElementById('rotationRange');
-  const rotationValue = document.getElementById('rotationValue');
-  const widthRange = document.getElementById('widthRange');
-  const widthValue = document.getElementById('widthValue');
-  const planVisible = document.getElementById('planVisible');
-  const planLatValue = document.getElementById('planLatValue');
-  const planLngValue = document.getElementById('planLngValue');
-  const resetCalibrationBtn = document.getElementById('resetCalibrationBtn');
-  const copyCalibrationBtn = document.getElementById('copyCalibrationBtn');
-  const useMapCenterBtn = document.getElementById('useMapCenterBtn');
+  const status = $('mapStatus');
+  const modeLabel = $('modeLabel');
+  const centerLabel = $('centerLabel');
+  const zoomLabel = $('zoomLabel');
 
-  const sectionsVisible = document.getElementById('sectionsVisible');
-  const manzanasVisible = document.getElementById('manzanasVisible');
-  const vectorStatus = document.getElementById('vectorStatus');
-  const vectorRotationRange = document.getElementById('vectorRotationRange');
-  const vectorRotationValue = document.getElementById('vectorRotationValue');
-  const vectorScaleRange = document.getElementById('vectorScaleRange');
-  const vectorScaleValue = document.getElementById('vectorScaleValue');
-  const resetVectorsBtn = document.getElementById('resetVectorsBtn');
-  const copyVectorsBtn = document.getElementById('copyVectorsBtn');
+  const opacityRange = $('opacityRange');
+  const opacityValue = $('opacityValue');
+  const rotationRange = $('rotationRange');
+  const rotationValue = $('rotationValue');
+  const widthRange = $('widthRange');
+  const widthValue = $('widthValue');
+  const planVisible = $('planVisible');
+  const planLatValue = $('planLatValue');
+  const planLngValue = $('planLngValue');
+  const resetCalibrationBtn = $('resetCalibrationBtn');
+  const copyCalibrationBtn = $('copyCalibrationBtn');
+  const useMapCenterBtn = $('useMapCenterBtn');
+
+  const sectionsVisible = $('sectionsVisible');
+  const manzanasVisible = $('manzanasVisible');
+  const vectorFlipHorizontal = $('vectorFlipHorizontal');
+  const vectorStatus = $('vectorStatus');
+  const vectorRotationRange = $('vectorRotationRange');
+  const vectorRotationValue = $('vectorRotationValue');
+  const vectorScaleRange = $('vectorScaleRange');
+  const vectorScaleValue = $('vectorScaleValue');
+  const resetVectorsBtn = $('resetVectorsBtn');
+  const copyVectorsBtn = $('copyVectorsBtn');
 
   let currentBasemap = 'light';
   let statusTimer = null;
@@ -196,8 +193,12 @@
 
   function transformPoint(point, includeVectorAdjustment) {
     const base = sourcePointToMeters(point);
-    const planRotated = rotateMeters(base.east, base.north, calibration.rotationDeg);
 
+    if (includeVectorAdjustment && vectorCalibration.flipHorizontal) {
+      base.east *= -1;
+    }
+
+    const planRotated = rotateMeters(base.east, base.north, calibration.rotationDeg);
     let east = planRotated.east;
     let north = planRotated.north;
 
@@ -311,6 +312,9 @@
     if (vectorRotationValue) vectorRotationValue.textContent = `${vectorCalibration.rotationDeg.toFixed(1)}°`;
     if (vectorScaleRange) vectorScaleRange.value = String(vectorCalibration.scale * 100);
     if (vectorScaleValue) vectorScaleValue.textContent = `${(vectorCalibration.scale * 100).toFixed(1)}%`;
+    if (vectorFlipHorizontal) vectorFlipHorizontal.checked = Boolean(vectorCalibration.flipHorizontal);
+    if (sectionsVisible) sectionsVisible.checked = true;
+    if (manzanasVisible) manzanasVisible.checked = true;
   }
 
   function updateVectorStatus() {
@@ -344,12 +348,11 @@
           'raster-resampling': 'linear'
         }
       });
-      return;
-    }
-
-    if (typeof source.setCoordinates === 'function') source.setCoordinates(coordinates);
-    if (map.getLayer('jdjp-plan-layer')) {
-      map.setPaintProperty('jdjp-plan-layer', 'raster-opacity', calibration.visible ? calibration.opacity : 0);
+    } else {
+      if (typeof source.setCoordinates === 'function') source.setCoordinates(coordinates);
+      if (map.getLayer('jdjp-plan-layer')) {
+        map.setPaintProperty('jdjp-plan-layer', 'raster-opacity', calibration.visible ? calibration.opacity : 0);
+      }
     }
   }
 
@@ -366,7 +369,7 @@
         id: layerId,
         type: 'line',
         source: sourceId,
-        layout: { visibility: sectionsVisible && sectionsVisible.checked ? 'visible' : 'none' },
+        layout: { visibility: 'visible' },
         paint: {
           'line-color': '#006cff',
           'line-width': 3.2,
@@ -387,7 +390,7 @@
     const sourceId = 'jdjp-manzanas';
     const fillLayerId = 'jdjp-manzanas-fill';
     const lineLayerId = 'jdjp-manzanas-line';
-    const visible = manzanasVisible && manzanasVisible.checked;
+    const visible = !manzanasVisible || manzanasVisible.checked;
     const source = map.getSource(sourceId);
 
     if (!source) {
@@ -399,7 +402,7 @@
         layout: { visibility: visible ? 'visible' : 'none' },
         paint: {
           'fill-color': '#ff8a00',
-          'fill-opacity': 0.20
+          'fill-opacity': 0.14
         }
       });
       map.addLayer({
@@ -408,8 +411,8 @@
         source: sourceId,
         layout: { visibility: visible ? 'visible' : 'none' },
         paint: {
-          'line-color': '#ff5a00',
-          'line-width': 4.2,
+          'line-color': '#ff4d00',
+          'line-width': 4.5,
           'line-opacity': 1
         }
       });
@@ -554,8 +557,13 @@
     calibration.visible = planVisible.checked;
     updateCalibration();
   });
+
   if (sectionsVisible) sectionsVisible.addEventListener('change', addOrUpdateVectorOverlays);
   if (manzanasVisible) manzanasVisible.addEventListener('change', addOrUpdateVectorOverlays);
+  if (vectorFlipHorizontal) vectorFlipHorizontal.addEventListener('change', function () {
+    vectorCalibration.flipHorizontal = vectorFlipHorizontal.checked;
+    updateVectorCalibration();
+  });
 
   if (vectorRotationRange) vectorRotationRange.addEventListener('input', function () {
     vectorCalibration.rotationDeg = Number(vectorRotationRange.value);
@@ -575,7 +583,9 @@
 
   document.querySelectorAll('[data-vector-nudge]').forEach(function (button) {
     const direction = button.dataset.vectorNudge;
-    button.addEventListener('click', function () { nudgeVectors(direction); });
+    if (['north', 'south', 'east', 'west'].includes(direction)) {
+      button.addEventListener('click', function () { nudgeVectors(direction); });
+    }
   });
 
   if (useMapCenterBtn) useMapCenterBtn.addEventListener('click', function () {
@@ -641,12 +651,18 @@
     sectionsRaw = results[0];
     manzanasRaw = results[1];
     normalizedManzanas = normalizeManzanasGeoJSON(manzanasRaw);
+
+    if (sectionsVisible) sectionsVisible.checked = true;
+    if (manzanasVisible) manzanasVisible.checked = true;
+
     updateVectorStatus();
     restorePreviewLayers();
+
     console.info('[Calibration] vectores listos', {
       secciones: sectionsRaw.features ? sectionsRaw.features.length : 0,
       manzanasOriginales: manzanasRaw.features ? manzanasRaw.features.length : 0,
-      manzanasRenderizadas: normalizedManzanas.features ? normalizedManzanas.features.length : 0
+      manzanasRenderizadas: normalizedManzanas.features ? normalizedManzanas.features.length : 0,
+      flipHorizontal: vectorCalibration.flipHorizontal
     });
   }).catch(function (error) {
     console.error('[Calibration] No fue posible cargar los GeoJSON.', error);
