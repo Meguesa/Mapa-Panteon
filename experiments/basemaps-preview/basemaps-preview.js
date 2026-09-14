@@ -186,6 +186,77 @@
     };
   }
 
+  function circlePointToPolygon(feature, steps) {
+    if (!feature || !feature.geometry || feature.geometry.type !== 'Point') return feature;
+    const radius = Number(feature.properties && feature.properties.radius);
+    if (!Number.isFinite(radius) || radius <= 0) return feature;
+
+    const center = feature.geometry.coordinates;
+    const cx = Number(center[0]);
+    const cy = Number(center[1]);
+    const ring = [];
+    const total = Math.max(24, Number(steps) || 48);
+
+    for (let i = 0; i <= total; i += 1) {
+      const angle = (Math.PI * 2 * i) / total;
+      ring.push([
+        cx + Math.cos(angle) * radius,
+        cy + Math.sin(angle) * radius
+      ]);
+    }
+
+    return {
+      type: 'Feature',
+      id: feature.id,
+      properties: Object.assign({}, feature.properties || {}, { sourceGeometry: 'point-radius' }),
+      geometry: {
+        type: 'Polygon',
+        coordinates: [ring]
+      }
+    };
+  }
+
+  function normalizeManzanasGeoJSON(data) {
+    const features = data && Array.isArray(data.features) ? data.features : [];
+    const normalized = [];
+    let convertedCircles = 0;
+    let polygons = 0;
+    let skippedPoints = 0;
+
+    features.forEach(function (feature) {
+      if (!feature || !feature.geometry) return;
+
+      if (feature.geometry.type === 'Point') {
+        const converted = circlePointToPolygon(feature, 56);
+        if (converted.geometry && converted.geometry.type === 'Polygon') {
+          normalized.push(converted);
+          convertedCircles += 1;
+        } else {
+          skippedPoints += 1;
+        }
+        return;
+      }
+
+      if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
+        normalized.push(feature);
+        polygons += 1;
+      }
+    });
+
+    console.info('[Calibration] manzanas normalizadas', {
+      totalOriginal: features.length,
+      totalAreas: normalized.length,
+      circulosConvertidos: convertedCircles,
+      poligonos: polygons,
+      puntosSinArea: skippedPoints
+    });
+
+    return {
+      type: 'FeatureCollection',
+      features: normalized
+    };
+  }
+
   function syncCalibrationUi() {
     opacityRange.value = String(Math.round(calibration.opacity * 100));
     opacityValue.textContent = `${Math.round(calibration.opacity * 100)}%`;
@@ -241,7 +312,7 @@
         paint: {
           'line-color': color,
           'line-width': width,
-          'line-opacity': 0.9
+          'line-opacity': 0.95
         }
       });
     } else {
@@ -252,9 +323,60 @@
     }
   }
 
+  function ensureManzanaLayers(data, visible) {
+    if (!map.isStyleLoaded() || !data) return;
+
+    const normalized = normalizeManzanasGeoJSON(data);
+    const transformed = transformGeoJSON(normalized);
+    const sourceId = 'jdjp-manzanas';
+    const fillLayerId = 'jdjp-manzanas-fill';
+    const lineLayerId = 'jdjp-manzanas-line';
+    const source = map.getSource(sourceId);
+
+    if (!source) {
+      map.addSource(sourceId, { type: 'geojson', data: transformed });
+
+      map.addLayer({
+        id: fillLayerId,
+        type: 'fill',
+        source: sourceId,
+        layout: { visibility: visible ? 'visible' : 'none' },
+        paint: {
+          'fill-color': '#f59e0b',
+          'fill-opacity': 0.10
+        }
+      });
+
+      map.addLayer({
+        id: lineLayerId,
+        type: 'line',
+        source: sourceId,
+        layout: { visibility: visible ? 'visible' : 'none' },
+        paint: {
+          'line-color': '#ff7a00',
+          'line-width': 3.2,
+          'line-opacity': 1
+        }
+      });
+    } else {
+      source.setData(transformed);
+      if (map.getLayer(fillLayerId)) {
+        map.setLayoutProperty(fillLayerId, 'visibility', visible ? 'visible' : 'none');
+      }
+      if (map.getLayer(lineLayerId)) {
+        map.setLayoutProperty(lineLayerId, 'visibility', visible ? 'visible' : 'none');
+      }
+    }
+
+    try {
+      if (map.getLayer(fillLayerId)) map.moveLayer(fillLayerId);
+      if (map.getLayer(lineLayerId)) map.moveLayer(lineLayerId);
+    } catch (_) {}
+  }
+
   function addOrUpdateVectorOverlays() {
     ensureVectorLayer('jdjp-sections', 'jdjp-sections-line', sectionsRaw, '#0b6ecf', 2.5, sectionsVisible.checked);
-    ensureVectorLayer('jdjp-manzanas', 'jdjp-manzanas-line', manzanasRaw, '#e97716', 1.8, manzanasVisible.checked);
+    ensureManzanaLayers(manzanasRaw, manzanasVisible.checked);
   }
 
   function markParkReference() {
