@@ -15,7 +15,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Calibración de Mapas Base | Mapa del Panteón</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="./basemaps-preview.css?v=4" />
+  <link rel="stylesheet" href="./basemaps-preview.css?v=5" />
 </head>
 <body>
   <header class="preview-header">
@@ -55,12 +55,12 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
       <div class="preview-panel-tag">ETAPA 2</div>
       <h2>Calibración del plano</h2>
       <p>
-        El plano original tiene una orientación distinta al norte geográfico. Ajusta su
-        <strong>posición, tamaño y rotación</strong> hasta hacer coincidir calles, glorietas y construcciones.
+        La calibración inicial ya usa los valores aprobados. Ajusta sólo si detectas una diferencia al comparar
+        calles, glorietas y construcciones con el fondo geográfico.
       </p>
 
       <div class="preview-info-row"><span>Modo</span><strong id="modeLabel">Light</strong></div>
-      <div class="preview-info-row"><span>Centro del mapa</span><strong id="centerLabel">25.816618, -100.156099</strong></div>
+      <div class="preview-info-row"><span>Centro del mapa</span><strong id="centerLabel">25.816327, -100.156123</strong></div>
       <div class="preview-info-row"><span>Zoom</span><strong id="zoomLabel">16.4</strong></div>
 
       <div class="calibration-section">
@@ -73,23 +73,23 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
         </div>
 
         <label class="calibration-control">
-          <span>Opacidad <strong id="opacityValue">42%</strong></span>
-          <input id="opacityRange" type="range" min="10" max="90" step="1" value="42" />
+          <span>Opacidad <strong id="opacityValue">31%</strong></span>
+          <input id="opacityRange" type="range" min="10" max="90" step="1" value="31" />
         </label>
 
         <label class="calibration-control">
-          <span>Rotación <strong id="rotationValue">0.0°</strong></span>
-          <input id="rotationRange" type="range" min="-45" max="45" step="0.1" value="0" />
+          <span>Rotación <strong id="rotationValue">5.7°</strong></span>
+          <input id="rotationRange" type="range" min="-45" max="45" step="0.1" value="5.7" />
         </label>
 
         <label class="calibration-control">
-          <span>Ancho del plano <strong id="widthValue">850 m</strong></span>
-          <input id="widthRange" type="range" min="450" max="1250" step="1" value="850" />
+          <span>Ancho del plano <strong id="widthValue">516 m</strong></span>
+          <input id="widthRange" type="range" min="400" max="900" step="1" value="516" />
         </label>
 
         <div class="calibration-coordinates">
-          <div><span>Latitud centro</span><strong id="planLatValue">25.816620</strong></div>
-          <div><span>Longitud centro</span><strong id="planLngValue">-100.156100</strong></div>
+          <div><span>Latitud centro</span><strong id="planLatValue">25.816327</strong></div>
+          <div><span>Longitud centro</span><strong id="planLngValue">-100.156123</strong></div>
         </div>
 
         <div class="nudge-label">Mover plano <span>(5 m por clic)</span></div>
@@ -102,15 +102,34 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
         </div>
 
         <div class="calibration-actions">
-          <button id="resetCalibrationBtn" type="button">Restablecer</button>
+          <button id="resetCalibrationBtn" type="button">Valores aprobados</button>
           <button id="copyCalibrationBtn" type="button" class="primary">Copiar calibración</button>
         </div>
       </div>
 
+      <div class="vector-validation">
+        <div class="calibration-heading">
+          <strong>Validación vectorial</strong>
+          <span class="validation-badge">NUEVO</span>
+        </div>
+        <label class="vector-toggle">
+          <input id="sectionsVisible" type="checkbox" checked />
+          <span><i class="vector-swatch section-swatch"></i>Secciones</span>
+        </label>
+        <label class="vector-toggle">
+          <input id="manzanasVisible" type="checkbox" checked />
+          <span><i class="vector-swatch manzana-swatch"></i>Manzanas</span>
+        </label>
+        <p>
+          Estas líneas se calculan con la misma transformación del plano. Si coinciden con el satélite,
+          la calibración ya puede aplicarse después a los lotes.
+        </p>
+      </div>
+
       <div class="calibration-help">
-        <strong>Orden recomendado</strong>
-        <span>1. Satélite · 2. Opacidad ~40% · 3. Rotación · 4. Tamaño · 5. Posición.</span>
-        <span>Usa como referencias las glorietas, curvas de calles y el edificio de la entrada.</span>
+        <strong>Qué revisar ahora</strong>
+        <span>Las líneas azules de secciones y las líneas naranjas de manzanas deben mantener la misma posición y ángulo que el plano.</span>
+        <span>Compara especialmente glorietas, curvas y extremos de los bloques.</span>
       </div>
     </aside>
 
@@ -118,6 +137,6 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   </main>
 
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="./basemaps-preview.js?v=4"></script>
+  <script src="./basemaps-preview.js?v=5"></script>
 </body>
 </html>
