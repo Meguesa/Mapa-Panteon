@@ -53,9 +53,9 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
     </section>
 
     <aside class="preview-panel calibration-panel">
-      <div class="preview-panel-tag">ETAPA 3</div>
-      <h2>Validación de lotes</h2>
-      <p>La transformación geográfica aprobada se aplica ahora directamente a los GeoJSON reales de lotes.</p>
+      <div class="preview-panel-tag">ETAPA 4</div>
+      <h2>Validación con inventario real</h2>
+      <p>La geometría validada se cruza ahora con la lista real de propiedades en SharePoint sin modificar el mapa productivo.</p>
 
       <div class="preview-info-row"><span>Modo</span><strong id="modeLabel">Light</strong></div>
       <div class="preview-info-row"><span>Centro del mapa</span><strong id="centerLabel">25.816327, -100.156123</strong></div>
@@ -109,7 +109,9 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
       </div>
 
       <div class="lots-stage">
-        <div class="calibration-heading"><strong>Lotes reales</strong><span class="validation-badge">PRUEBA</span></div>
+        <div class="calibration-heading"><strong>Lotes reales</strong><span class="validation-badge">SHAREPOINT</span></div>
+
+        <div id="inventoryLiveStatus" class="lots-selected"><strong>Inventario SharePoint</strong><br>Preparando conexión…</div>
 
         <label class="lots-field">
           <span>Sección</span>
@@ -138,18 +140,18 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
         </div>
 
         <div id="lotStatus" class="lots-selected">Selecciona una sección para cargar sus lotes.</div>
-        <div id="lotSelected" class="lots-selected">Selecciona un lote sobre el mapa para verificar posición y datos básicos.</div>
+        <div id="lotSelected" class="lots-selected">Selecciona un lote sobre el mapa para verificar posición e inventario.</div>
 
         <div class="lots-legend">
           <span><i class="lot-available"></i>Disponible</span>
           <span><i class="lot-separated"></i>Separado</span>
           <span><i class="lot-sold"></i>Vendido</span>
-          <span><i class="lot-used"></i>Utilizado</span>
+          <span><i class="lot-used"></i>Utilizado / lleno</span>
           <span><i class="lot-suspended"></i>Suspendido</span>
           <span><i class="lot-build"></i>Por construir</span>
         </div>
 
-        <div class="lots-note">En esta etapa los colores provienen del GeoJSON estático. Después de validar la posición conectaremos nuevamente el inventario de SharePoint.</div>
+        <div class="lots-note">Los colores de esta etapa se obtienen del inventario real de SharePoint cuando existe coincidencia por sección + manzana + lote. Si un lote no encuentra match, conserva temporalmente el estatus del GeoJSON para poder detectar diferencias.</div>
       </div>
     </aside>
 
@@ -158,8 +160,6 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
 
   <script>
     (function () {
-      // Forzar la calibración vectorial aprobada para que cualquier navegador use
-      // exactamente la misma transformación durante la validación de lotes.
       localStorage.setItem('jp-basemap-vector-calibration-v3', JSON.stringify({
         offsetEastMeters: 0,
         offsetNorthMeters: 0,
@@ -172,8 +172,6 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   </script>
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
   <script>
-    // Captura no invasiva de la instancia que crea el preview base para que el
-    // módulo de lotes pueda reutilizar el mismo mapa sin modificar producción.
     (function () {
       const OriginalMap = maplibregl.Map;
       maplibregl.Map = class JPPreviewMap extends OriginalMap {
@@ -185,6 +183,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
     })();
   </script>
   <script src="./basemaps-preview.js?v=10"></script>
-  <script src="./lots-preview.js?v=1"></script>
+  <script src="./inventory-preview.js?v=1"></script>
+  <script src="./lots-preview.js?v=2"></script>
 </body>
 </html>
