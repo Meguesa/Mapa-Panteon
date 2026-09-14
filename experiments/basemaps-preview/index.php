@@ -15,7 +15,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Calibración de Mapas Base | Mapa del Panteón</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="./basemaps-preview.css?v=8" />
+  <link rel="stylesheet" href="./basemaps-preview.css?v=9" />
 </head>
 <body>
   <header class="preview-header">
@@ -54,7 +54,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
     <aside class="preview-panel calibration-panel">
       <div class="preview-panel-tag">ETAPA 2</div>
       <h2>Calibración del plano</h2>
-      <p>Primero se calibra la imagen del plano. Después puedes ajustar de forma independiente las líneas azules/naranjas sin mover la imagen.</p>
+      <p>La posición del plano y la transformación vectorial ya están suficientemente alineadas para continuar con manzanas y lotes.</p>
 
       <div class="preview-info-row"><span>Modo</span><strong id="modeLabel">Light</strong></div>
       <div class="preview-info-row"><span>Centro del mapa</span><strong id="centerLabel">25.816327, -100.156123</strong></div>
@@ -91,43 +91,58 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
       </div>
 
       <div class="vector-validation">
-        <div class="calibration-heading"><strong>Ajuste de líneas</strong><span class="validation-badge">INDEPENDIENTE</span></div>
+        <div class="calibration-heading"><strong>Ajuste vectorial aprobado</strong><span class="validation-badge">LISTO</span></div>
 
         <label class="vector-toggle"><input id="sectionsVisible" type="checkbox" checked /><span><i class="vector-swatch section-swatch"></i>Secciones azules</span></label>
-        <label class="vector-toggle"><input id="manzanasVisible" type="checkbox" checked /><span><i class="vector-swatch manzana-swatch"></i>Manzanas naranjas</span></label>
-        <label class="vector-toggle"><input id="vectorFlipHorizontal" type="checkbox" /><span>↔ Flip horizontal de líneas</span></label>
-        <label class="vector-toggle"><input id="vectorFlipVertical" type="checkbox" /><span>↕ Flip vertical de líneas</span></label>
+        <input id="manzanasVisible" type="checkbox" checked hidden />
+        <input id="vectorFlipHorizontal" type="checkbox" hidden />
+        <input id="vectorFlipVertical" type="checkbox" checked hidden />
 
+        <div class="preview-info-row"><span>Referencia utilizada</span><strong>Secciones azules</strong></div>
+        <div class="preview-info-row"><span>Flip horizontal</span><strong>No</strong></div>
+        <div class="preview-info-row"><span>Flip vertical</span><strong>Sí</strong></div>
+        <div class="preview-info-row"><span>Escala</span><strong>100%</strong></div>
+        <div class="preview-info-row"><span>Rotación adicional</span><strong>0°</strong></div>
+        <div class="preview-info-row"><span>Desplazamiento adicional</span><strong>0 m</strong></div>
         <div class="preview-info-row"><span>Vectores cargados</span><strong id="vectorStatus">Cargando…</strong></div>
 
-        <label class="calibration-control"><span>Rotación líneas <strong id="vectorRotationValue">0.0°</strong></span><input id="vectorRotationRange" type="range" min="-180" max="180" step="0.1" value="0" /></label>
-        <label class="calibration-control"><span>Escala líneas <strong id="vectorScaleValue">100.0%</strong></span><input id="vectorScaleRange" type="range" min="70" max="130" step="0.1" value="100" /></label>
+        <input id="vectorRotationRange" type="range" min="-180" max="180" step="0.1" value="0" hidden />
+        <span id="vectorRotationValue" hidden>0.0°</span>
+        <input id="vectorScaleRange" type="range" min="70" max="130" step="0.1" value="100" hidden />
+        <span id="vectorScaleValue" hidden>100.0%</span>
+        <button id="resetVectorsBtn" type="button" hidden></button>
+        <button id="copyVectorsBtn" type="button" hidden></button>
 
-        <div class="nudge-label">Mover líneas <span>(2 m por clic)</span></div>
-        <div class="nudge-grid" aria-label="Mover líneas">
-          <button type="button" data-vector-nudge="north" title="Mover líneas al norte">↑</button>
-          <button type="button" data-vector-nudge="west" title="Mover líneas al oeste">←</button>
-          <button type="button" id="resetVectorsBtn" title="Restablecer ajuste de líneas">◎</button>
-          <button type="button" data-vector-nudge="east" title="Mover líneas al este">→</button>
-          <button type="button" data-vector-nudge="south" title="Mover líneas al sur">↓</button>
-        </div>
-
-        <div class="calibration-actions"><button id="copyVectorsBtn" type="button" class="primary">Copiar ajuste de líneas</button></div>
-        <p>Estos controles mueven únicamente las líneas vectoriales. La imagen semitransparente del plano no cambia.</p>
+        <p>La transformación aprobada se utilizará como referencia geográfica para las manzanas y los lotes. Las líneas naranjas de calibración dejan de ser un requisito para continuar.</p>
       </div>
 
       <div class="calibration-help">
-        <strong>Qué revisar ahora</strong>
-        <span>1. Usa flip horizontal y/o vertical para corregir cualquier efecto espejo.</span>
-        <span>2. Las manzanas naranjas quedan activadas por defecto y se fuerzan visibles al terminar de cargar.</span>
-        <span>3. Después ajusta rotación, escala y posición.</span>
+        <strong>Siguiente etapa</strong>
+        <span>Aplicar esta misma transformación a los GeoJSON de lotes y comprobar su alineación sobre Light y Satélite.</span>
       </div>
     </aside>
 
     <div id="mapStatus" class="map-status">Cargando mapa…</div>
   </main>
 
+  <script>
+    // Calibración vectorial aprobada. Sólo se siembra cuando el navegador no tiene
+    // una calibración previa para esta versión del preview.
+    (function () {
+      const key = 'jp-basemap-vector-calibration-v3';
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, JSON.stringify({
+          offsetEastMeters: 0,
+          offsetNorthMeters: 0,
+          scale: 1,
+          rotationDeg: 0,
+          flipHorizontal: false,
+          flipVertical: true
+        }));
+      }
+    })();
+  </script>
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="./basemaps-preview.js?v=8"></script>
+  <script src="./basemaps-preview.js?v=9"></script>
 </body>
 </html>
