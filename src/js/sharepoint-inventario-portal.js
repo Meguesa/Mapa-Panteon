@@ -15,6 +15,123 @@
     inventory: null
   };
 
+  function ensureLoadingOverlay() {
+    if (document.getElementById("jp-map-loading")) return;
+
+    const host = document.querySelector("main") || document.body;
+    if (host !== document.body && window.getComputedStyle(host).position === "static") {
+      host.style.position = "relative";
+    }
+
+    if (!document.getElementById("jp-map-loading-style")) {
+      const style = document.createElement("style");
+      style.id = "jp-map-loading-style";
+      style.textContent = `
+        @keyframes jpMapLoadingSpin {
+          to { transform: rotate(360deg); }
+        }
+        #jp-map-loading {
+          position: absolute;
+          inset: 0;
+          z-index: 50000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255, 255, 255, 0.94);
+          opacity: 1;
+          transition: opacity 180ms ease;
+        }
+        #jp-map-loading.jp-map-loading--hide {
+          opacity: 0;
+          pointer-events: none;
+        }
+        #jp-map-loading .jp-map-loading-card {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 18px;
+          border: 1px solid #dbe3ec;
+          border-radius: 14px;
+          background: #ffffff;
+          color: #0f2740;
+          font-size: 16px;
+          font-weight: 700;
+          box-shadow: 0 12px 30px rgba(15, 39, 64, 0.12);
+        }
+        #jp-map-loading .jp-map-loading-spinner {
+          width: 22px;
+          height: 22px;
+          border: 3px solid #dbe7f1;
+          border-top-color: #265585;
+          border-radius: 50%;
+          animation: jpMapLoadingSpin 0.8s linear infinite;
+          flex: 0 0 auto;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const overlay = document.createElement("div");
+    overlay.id = "jp-map-loading";
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+    overlay.innerHTML = `
+      <div class="jp-map-loading-card">
+        <span class="jp-map-loading-spinner" aria-hidden="true"></span>
+        <span id="jp-map-loading-label">Cargando...</span>
+      </div>
+    `;
+    host.appendChild(overlay);
+  }
+
+  function hideLoadingOverlay() {
+    const overlay = document.getElementById("jp-map-loading");
+    if (!overlay) return;
+    overlay.classList.add("jp-map-loading--hide");
+    window.setTimeout(function () {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }, 220);
+  }
+
+  function watchMapReady() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("edit")) {
+      window.setTimeout(hideLoadingOverlay, 250);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(function () {
+      const mapImage = document.querySelector("#map .leaflet-image-layer");
+      const sectionSelect = document.getElementById("sectionSelect");
+      const sectionsReady = Boolean(
+        sectionSelect && sectionSelect.options && sectionSelect.options.length > 1
+      );
+      const panelTitle = document.getElementById("panelTitle");
+      const panelText = panelTitle ? String(panelTitle.textContent || "").trim().toLowerCase() : "";
+
+      if (mapImage && sectionsReady) {
+        window.clearInterval(timer);
+        hideLoadingOverlay();
+        return;
+      }
+
+      if (panelText.startsWith("error")) {
+        window.clearInterval(timer);
+        hideLoadingOverlay();
+        return;
+      }
+
+      if (Date.now() - startedAt > 60000) {
+        const label = document.getElementById("jp-map-loading-label");
+        if (label) label.textContent = "Cargando...";
+      }
+    }, 150);
+  }
+
+  ensureLoadingOverlay();
+  watchMapReady();
+
   function isInventoryRequest(input) {
     const rawUrl = typeof input === "string" ? input : input && input.url;
     if (!rawUrl) return false;
