@@ -321,12 +321,18 @@ jobs:
       - name: Diagnosticar puerto FTPS
         shell: bash
         continue-on-error: true
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
         run: |
           set +e
+          if [ -z "$FTP_SERVER" ]; then
+            echo '::warning::FTP_SERVER no esta configurado.'
+            exit 0
+          fi
           echo 'Resolucion DNS:'
-          getent ahostsv4 whm95.mxwebserver.com | head -5
+          getent ahostsv4 "$FTP_SERVER" | head -5
           echo 'Prueba TCP a puerto 21 (15 segundos):'
-          timeout 15 bash -c 'cat < /dev/null > /dev/tcp/whm95.mxwebserver.com/21'
+          timeout 15 bash -c "cat < /dev/null > /dev/tcp/${FTP_SERVER}/21"
           rc=$?
           if [ "$rc" -eq 0 ]; then
             echo 'Puerto 21 accesible desde el runner.'
@@ -339,7 +345,7 @@ jobs:
         if: ${{ inputs.publicar_solo_referencias_visuales == true }}
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
-          server: whm95.mxwebserver.com
+          server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
@@ -356,7 +362,7 @@ jobs:
         if: ${{ inputs.publicar_solo_referencias_visuales == false }}
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
-          server: whm95.mxwebserver.com
+          server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
@@ -373,7 +379,7 @@ jobs:
         if: ${{ inputs.publicar_solo_referencias_visuales == false && inputs.publicar_imagenes_nichos_v2 == true }}
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
-          server: whm95.mxwebserver.com
+          server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
@@ -390,7 +396,7 @@ jobs:
         if: ${{ inputs.publicar_solo_referencias_visuales == false && inputs.publicar_datos_estructurales == true }}
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
-          server: whm95.mxwebserver.com
+          server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
