@@ -15,7 +15,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Calibración de Mapas Base | Mapa del Panteón</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="./basemaps-preview.css?v=6" />
+  <link rel="stylesheet" href="./basemaps-preview.css?v=7" />
 </head>
 <body>
   <header class="preview-header">
@@ -121,17 +121,21 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
           <input id="manzanasVisible" type="checkbox" checked />
           <span><i class="vector-swatch manzana-swatch"></i>Manzanas naranjas</span>
         </label>
+        <label class="vector-toggle">
+          <input id="vectorFlipHorizontal" type="checkbox" />
+          <span>↔ Flip horizontal de líneas</span>
+        </label>
 
         <div class="preview-info-row"><span>Vectores cargados</span><strong id="vectorStatus">Cargando…</strong></div>
 
         <label class="calibration-control">
           <span>Rotación líneas <strong id="vectorRotationValue">0.0°</strong></span>
-          <input id="vectorRotationRange" type="range" min="-20" max="20" step="0.1" value="0" />
+          <input id="vectorRotationRange" type="range" min="-180" max="180" step="0.1" value="0" />
         </label>
 
         <label class="calibration-control">
           <span>Escala líneas <strong id="vectorScaleValue">100.0%</strong></span>
-          <input id="vectorScaleRange" type="range" min="80" max="120" step="0.1" value="100" />
+          <input id="vectorScaleRange" type="range" min="70" max="130" step="0.1" value="100" />
         </label>
 
         <div class="nudge-label">Mover líneas <span>(2 m por clic)</span></div>
@@ -154,8 +158,9 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
 
       <div class="calibration-help">
         <strong>Qué revisar ahora</strong>
-        <span>1. Alinea primero las líneas azules con los límites del plano usando rotación, escala y flechas.</span>
-        <span>2. Las manzanas naranjas deben aparecer encima del plano. Si coinciden, utilizaremos este mismo ajuste para los lotes.</span>
+        <span>1. Activa Flip horizontal si las secciones están reflejadas izquierda/derecha.</span>
+        <span>2. Las manzanas naranjas quedan activadas por defecto y se dibujan por encima de las secciones.</span>
+        <span>3. Después ajusta rotación, escala y posición.</span>
       </div>
     </aside>
 
@@ -163,6 +168,6 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   </main>
 
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="./basemaps-preview.js?v=6"></script>
+  <script src="./basemaps-preview.js?v=7"></script>
 </body>
 </html>
