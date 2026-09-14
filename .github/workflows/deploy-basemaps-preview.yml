@@ -7,6 +7,8 @@ on:
     paths:
       - 'experiments/basemaps-preview/**'
       - 'assets/map/base-public.webp'
+      - 'data/secciones-top.geojson'
+      - 'data/secciones.geojson'
       - '.github/workflows/deploy-basemaps-preview.yml'
   workflow_dispatch:
 
@@ -35,12 +37,18 @@ jobs:
           node --check experiments/basemaps-preview/basemaps-preview.js
           test -s experiments/basemaps-preview/basemaps-preview.css
           test -s assets/map/base-public.webp
+          test -s data/secciones-top.geojson
+          test -s data/secciones.geojson
           grep -Fq 'OpenFreeMap Positron' experiments/basemaps-preview/index.php
           grep -Fq 'Esri World Imagery' experiments/basemaps-preview/index.php
           grep -Fq 'tiles.openfreemap.org/styles/positron' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'World_Imagery/MapServer/tile' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'PLAN_IMAGE_URL' experiments/basemaps-preview/basemaps-preview.js
-          grep -Fq 'SATELLITE_CLEAR_MAX_ZOOM = 18.45' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'SATELLITE_CLEAR_MAX_ZOOM = 18.65' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'widthMeters: 516' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'rotationDeg: 5.7' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'SECTIONS_URL' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'MANZANAS_URL' experiments/basemaps-preview/basemaps-preview.js
 
       - name: Preparar paquete
         shell: bash
@@ -52,6 +60,8 @@ jobs:
           cp experiments/basemaps-preview/basemaps-preview.css deploy-basemaps-preview/basemaps-preview.css
           cp experiments/basemaps-preview/basemaps-preview.js deploy-basemaps-preview/basemaps-preview.js
           cp assets/map/base-public.webp deploy-basemaps-preview/base-plan.webp
+          cp data/secciones-top.geojson deploy-basemaps-preview/secciones-top.geojson
+          cp data/secciones.geojson deploy-basemaps-preview/secciones.geojson
           du -sh deploy-basemaps-preview
 
       - name: Publicar preview en cPanel
@@ -66,6 +76,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v2.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v3.json
           dry-run: false
           log-level: standard
