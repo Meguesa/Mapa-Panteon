@@ -9,6 +9,7 @@ on:
       - 'assets/map/base-public.webp'
       - 'data/secciones-top.geojson'
       - 'data/secciones.geojson'
+      - 'data/lotes/**'
       - '.github/workflows/deploy-basemaps-preview.yml'
   workflow_dispatch:
 
@@ -35,10 +36,19 @@ jobs:
           set -euo pipefail
           php -l experiments/basemaps-preview/index.php
           node --check experiments/basemaps-preview/basemaps-preview.js
+          node --check experiments/basemaps-preview/lots-preview.js
           test -s experiments/basemaps-preview/basemaps-preview.css
+          test -s experiments/basemaps-preview/lots-preview.css
           test -s assets/map/base-public.webp
           test -s data/secciones-top.geojson
           test -s data/secciones.geojson
+          test -s data/lotes/bronce/lotes.geojson
+          test -s data/lotes/oro/lotes.geojson
+          test -s data/lotes/plata/lotes.geojson
+          test -s data/lotes/platino/lotes.geojson
+          test -s data/lotes/sanjuanvip/lotes.geojson
+          test -s data/lotes/sanmateovip/lotes.geojson
+          test -s data/lotes/sanpedrovip/lotes.geojson
           grep -Fq 'OpenFreeMap Positron' experiments/basemaps-preview/index.php
           grep -Fq 'Esri World Imagery' experiments/basemaps-preview/index.php
           grep -Fq 'tiles.openfreemap.org/styles/positron' experiments/basemaps-preview/basemaps-preview.js
@@ -47,21 +57,30 @@ jobs:
           grep -Fq 'SATELLITE_CLEAR_MAX_ZOOM = 18.65' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'widthMeters: 516' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'rotationDeg: 5.7' experiments/basemaps-preview/basemaps-preview.js
-          grep -Fq 'SECTIONS_URL' experiments/basemaps-preview/basemaps-preview.js
-          grep -Fq 'MANZANAS_URL' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'flipVertical: true' experiments/basemaps-preview/index.php
+          grep -Fq 'SECTION_FILES' experiments/basemaps-preview/lots-preview.js
 
       - name: Preparar paquete
         shell: bash
         run: |
           set -euo pipefail
           rm -rf deploy-basemaps-preview
-          mkdir -p deploy-basemaps-preview
+          mkdir -p deploy-basemaps-preview/lotes/{bronce,oro,plata,platino,sanjuanvip,sanmateovip,sanpedrovip}
           cp experiments/basemaps-preview/index.php deploy-basemaps-preview/index.php
           cp experiments/basemaps-preview/basemaps-preview.css deploy-basemaps-preview/basemaps-preview.css
           cp experiments/basemaps-preview/basemaps-preview.js deploy-basemaps-preview/basemaps-preview.js
+          cp experiments/basemaps-preview/lots-preview.css deploy-basemaps-preview/lots-preview.css
+          cp experiments/basemaps-preview/lots-preview.js deploy-basemaps-preview/lots-preview.js
           cp assets/map/base-public.webp deploy-basemaps-preview/base-plan.webp
           cp data/secciones-top.geojson deploy-basemaps-preview/secciones-top.geojson
           cp data/secciones.geojson deploy-basemaps-preview/secciones.geojson
+          cp data/lotes/bronce/lotes.geojson deploy-basemaps-preview/lotes/bronce/lotes.geojson
+          cp data/lotes/oro/lotes.geojson deploy-basemaps-preview/lotes/oro/lotes.geojson
+          cp data/lotes/plata/lotes.geojson deploy-basemaps-preview/lotes/plata/lotes.geojson
+          cp data/lotes/platino/lotes.geojson deploy-basemaps-preview/lotes/platino/lotes.geojson
+          cp data/lotes/sanjuanvip/lotes.geojson deploy-basemaps-preview/lotes/sanjuanvip/lotes.geojson
+          cp data/lotes/sanmateovip/lotes.geojson deploy-basemaps-preview/lotes/sanmateovip/lotes.geojson
+          cp data/lotes/sanpedrovip/lotes.geojson deploy-basemaps-preview/lotes/sanpedrovip/lotes.geojson
           du -sh deploy-basemaps-preview
 
       - name: Publicar preview en cPanel
@@ -76,6 +95,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v3.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v4.json
           dry-run: false
           log-level: standard
