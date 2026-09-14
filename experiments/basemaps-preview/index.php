@@ -53,6 +53,10 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
         <span class="basemap-thumb thumb-satellite"></span>
         <span><strong>Satélite</strong><small>Esri World Imagery</small></span>
       </button>
+      <button type="button" class="basemap-option" data-basemap="satelliteClarity">
+        <span class="basemap-thumb thumb-satellite"></span>
+        <span><strong>Satélite Clarity</strong><small>Esri archivo · prueba</small></span>
+      </button>
     </section>
 
     <aside class="preview-panel">
@@ -72,6 +76,6 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   </main>
 
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="./basemaps-preview.js?v=1"></script>
+  <script src="./basemaps-preview.js?v=2"></script>
 </body>
 </html>
