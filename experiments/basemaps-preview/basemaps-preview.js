@@ -1,12 +1,16 @@
 (function () {
   'use strict';
 
-  const CENTER = [-100.15610, 25.81662];
+  const CENTER = [-100.15612317763441, 25.81632700772623];
   const START_ZOOM = 16.4;
-  const SATELLITE_CLEAR_MAX_ZOOM = 18.45;
-  const PLAN_ASPECT = 11100 / 9250;
+  const SATELLITE_CLEAR_MAX_ZOOM = 18.65;
+  const DATA_WIDTH = 11100;
+  const DATA_HEIGHT = 9250;
+  const PLAN_ASPECT = DATA_WIDTH / DATA_HEIGHT;
   const PLAN_IMAGE_URL = './base-plan.webp';
-  const CALIBRATION_KEY = 'jp-basemap-calibration-v1';
+  const SECTIONS_URL = './secciones-top.geojson';
+  const MANZANAS_URL = './secciones.geojson';
+  const CALIBRATION_KEY = 'jp-basemap-calibration-v2';
 
   function rasterStyle(id, url, maxzoom, attribution) {
     return {
@@ -42,11 +46,11 @@
   const labels = { light: 'Light', satellite: 'Satélite' };
 
   const DEFAULT_CALIBRATION = {
-    lat: 25.81662,
-    lng: -100.15610,
-    widthMeters: 850,
-    rotationDeg: 0,
-    opacity: 0.42,
+    lat: 25.81632700772623,
+    lng: -100.15612317763441,
+    widthMeters: 516,
+    rotationDeg: 5.7,
+    opacity: 0.31,
     visible: true
   };
 
@@ -67,10 +71,14 @@
   const resetCalibrationBtn = document.getElementById('resetCalibrationBtn');
   const copyCalibrationBtn = document.getElementById('copyCalibrationBtn');
   const useMapCenterBtn = document.getElementById('useMapCenterBtn');
+  const sectionsVisible = document.getElementById('sectionsVisible');
+  const manzanasVisible = document.getElementById('manzanasVisible');
 
   let currentBasemap = 'light';
   let statusTimer = null;
   let calibration = loadCalibration();
+  let sectionsRaw = null;
+  let manzanasRaw = null;
 
   function loadCalibration() {
     try {
@@ -127,32 +135,55 @@
     return meters / 110540;
   }
 
-  function planCoordinates() {
-    const width = calibration.widthMeters;
-    const height = width / PLAN_ASPECT;
-    const halfW = width / 2;
-    const halfH = height / 2;
+  function transformPoint(point) {
+    const x = Number(point[0]);
+    const y = Number(point[1]);
+    const heightMeters = calibration.widthMeters / PLAN_ASPECT;
+    const east0 = ((x / DATA_WIDTH) - 0.5) * calibration.widthMeters;
+    const north0 = (0.5 - (y / DATA_HEIGHT)) * heightMeters;
     const angle = calibration.rotationDeg * Math.PI / 180;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-
-    const corners = [
-      [-halfW, halfH],
-      [halfW, halfH],
-      [halfW, -halfH],
-      [-halfW, -halfH]
+    const east = east0 * cos + north0 * sin;
+    const north = -east0 * sin + north0 * cos;
+    return [
+      calibration.lng + metersToLng(east, calibration.lat),
+      calibration.lat + metersToLat(north)
     ];
+  }
 
-    return corners.map(function (corner) {
-      const x = corner[0];
-      const y = corner[1];
-      const east = x * cos + y * sin;
-      const north = -x * sin + y * cos;
-      return [
-        calibration.lng + metersToLng(east, calibration.lat),
-        calibration.lat + metersToLat(north)
-      ];
-    });
+  function planCoordinates() {
+    return [
+      transformPoint([0, 0]),
+      transformPoint([DATA_WIDTH, 0]),
+      transformPoint([DATA_WIDTH, DATA_HEIGHT]),
+      transformPoint([0, DATA_HEIGHT])
+    ];
+  }
+
+  function transformCoordinates(coords) {
+    if (!Array.isArray(coords)) return coords;
+    if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+      return transformPoint(coords);
+    }
+    return coords.map(transformCoordinates);
+  }
+
+  function transformGeoJSON(data) {
+    return {
+      type: 'FeatureCollection',
+      features: (data && Array.isArray(data.features) ? data.features : []).map(function (feature) {
+        return {
+          type: 'Feature',
+          id: feature.id,
+          properties: Object.assign({}, feature.properties || {}),
+          geometry: feature.geometry ? {
+            type: feature.geometry.type,
+            coordinates: transformCoordinates(feature.geometry.coordinates)
+          } : null
+        };
+      })
+    };
   }
 
   function syncCalibrationUi() {
@@ -169,7 +200,6 @@
 
   function addOrUpdatePlanOverlay() {
     if (!map.isStyleLoaded()) return;
-
     const coordinates = planCoordinates();
     const source = map.getSource('jdjp-plan');
 
@@ -197,6 +227,36 @@
     }
   }
 
+  function ensureVectorLayer(sourceId, layerId, data, color, width, visible) {
+    if (!map.isStyleLoaded() || !data) return;
+    const transformed = transformGeoJSON(data);
+    const source = map.getSource(sourceId);
+    if (!source) {
+      map.addSource(sourceId, { type: 'geojson', data: transformed });
+      map.addLayer({
+        id: layerId,
+        type: 'line',
+        source: sourceId,
+        layout: { visibility: visible ? 'visible' : 'none' },
+        paint: {
+          'line-color': color,
+          'line-width': width,
+          'line-opacity': 0.9
+        }
+      });
+    } else {
+      source.setData(transformed);
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+      }
+    }
+  }
+
+  function addOrUpdateVectorOverlays() {
+    ensureVectorLayer('jdjp-sections', 'jdjp-sections-line', sectionsRaw, '#0b6ecf', 2.5, sectionsVisible.checked);
+    ensureVectorLayer('jdjp-manzanas', 'jdjp-manzanas-line', manzanasRaw, '#e97716', 1.8, manzanasVisible.checked);
+  }
+
   function markParkReference() {
     if (map.getSource('park-reference')) return;
     map.addSource('park-reference', {
@@ -210,7 +270,6 @@
         }]
       }
     });
-
     map.addLayer({
       id: 'park-reference-ring',
       type: 'circle',
@@ -223,7 +282,6 @@
         'circle-stroke-color': '#7a2d00'
       }
     });
-
     map.addLayer({
       id: 'park-reference-dot',
       type: 'circle',
@@ -234,6 +292,7 @@
 
   function restorePreviewLayers() {
     try { addOrUpdatePlanOverlay(); } catch (error) { console.warn('[Calibration] plano', error); }
+    try { addOrUpdateVectorOverlays(); } catch (error) { console.warn('[Calibration] vectores', error); }
     try { markParkReference(); } catch (_) {}
   }
 
@@ -250,14 +309,12 @@
   function applyBasemap(key, options) {
     const config = options || {};
     if (!styles[key]) return;
-
     currentBasemap = key;
     setStatus(`Cargando ${labels[key]}…`, 0);
     map.setStyle(styles[key], { diff: false });
     modeLabel.textContent = labels[key];
     localStorage.setItem('jp-basemap-preview', key);
     setActiveButton(key);
-
     map.once('styledata', restorePreviewLayers);
     map.once('idle', function () {
       restorePreviewLayers();
@@ -285,6 +342,7 @@
     saveCalibration();
     syncCalibrationUi();
     addOrUpdatePlanOverlay();
+    addOrUpdateVectorOverlays();
   }
 
   function nudge(direction) {
@@ -300,21 +358,20 @@
     calibration.opacity = Number(opacityRange.value) / 100;
     updateCalibration();
   });
-
   rotationRange.addEventListener('input', function () {
     calibration.rotationDeg = Number(rotationRange.value);
     updateCalibration();
   });
-
   widthRange.addEventListener('input', function () {
     calibration.widthMeters = Number(widthRange.value);
     updateCalibration();
   });
-
   planVisible.addEventListener('change', function () {
     calibration.visible = planVisible.checked;
     updateCalibration();
   });
+  sectionsVisible.addEventListener('change', addOrUpdateVectorOverlays);
+  manzanasVisible.addEventListener('change', addOrUpdateVectorOverlays);
 
   document.querySelectorAll('[data-nudge]').forEach(function (button) {
     const direction = button.dataset.nudge;
@@ -334,7 +391,7 @@
   resetCalibrationBtn.addEventListener('click', function () {
     calibration = Object.assign({}, DEFAULT_CALIBRATION);
     updateCalibration();
-    setStatus('Calibración restablecida.', 1800);
+    setStatus('Se restauraron los valores aprobados.', 1800);
   });
 
   copyCalibrationBtn.addEventListener('click', async function () {
@@ -354,10 +411,25 @@
 
   syncCalibrationUi();
 
+  Promise.all([
+    fetch(SECTIONS_URL, { cache: 'no-store' }).then((r) => r.json()),
+    fetch(MANZANAS_URL, { cache: 'no-store' }).then((r) => r.json())
+  ]).then(function (results) {
+    sectionsRaw = results[0];
+    manzanasRaw = results[1];
+    restorePreviewLayers();
+    console.info('[Calibration] vectores cargados', {
+      secciones: sectionsRaw.features ? sectionsRaw.features.length : 0,
+      manzanas: manzanasRaw.features ? manzanasRaw.features.length : 0
+    });
+  }).catch(function (error) {
+    console.error('[Calibration] No fue posible cargar los GeoJSON de validación.', error);
+    setStatus('No fue posible cargar secciones/manzanas para validar la calibración.', 5200);
+  });
+
   map.on('load', function () {
     updateLocationReadout();
     restorePreviewLayers();
-
     const saved = localStorage.getItem('jp-basemap-preview');
     if (saved && saved !== 'light' && styles[saved]) requestBasemap(saved);
     else {
