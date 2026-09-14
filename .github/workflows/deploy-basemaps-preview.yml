@@ -1,0 +1,66 @@
+name: Publicar preview de mapas base
+
+on:
+  push:
+    branches:
+      - preview/map-basemaps
+    paths:
+      - 'experiments/basemaps-preview/**'
+      - '.github/workflows/deploy-basemaps-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-mapa-basemaps-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publicar preview Basemaps
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Validar archivos del preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l experiments/basemaps-preview/index.php
+          node --check experiments/basemaps-preview/basemaps-preview.js
+          test -s experiments/basemaps-preview/basemaps-preview.css
+          grep -Fq 'OpenFreeMap Positron' experiments/basemaps-preview/index.php
+          grep -Fq 'Esri World Imagery' experiments/basemaps-preview/index.php
+          grep -Fq 'tiles.openfreemap.org/styles/positron' experiments/basemaps-preview/basemaps-preview.js
+          grep -Fq 'World_Imagery/MapServer/tile' experiments/basemaps-preview/basemaps-preview.js
+
+      - name: Preparar paquete
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf deploy-basemaps-preview
+          mkdir -p deploy-basemaps-preview
+          cp experiments/basemaps-preview/index.php deploy-basemaps-preview/index.php
+          cp experiments/basemaps-preview/basemaps-preview.css deploy-basemaps-preview/basemaps-preview.css
+          cp experiments/basemaps-preview/basemaps-preview.js deploy-basemaps-preview/basemaps-preview.js
+          du -sh deploy-basemaps-preview
+
+      - name: Publicar preview en cPanel
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: strict
+          timeout: 180000
+          local-dir: ./deploy-basemaps-preview/
+          server-dir: ./preview-basemaps/
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v1.json
+          dry-run: false
+          log-level: standard
