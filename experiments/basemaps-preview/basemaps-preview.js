@@ -16,11 +16,24 @@
             'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
           ],
           tileSize: 256,
+          // En esta zona Esri devuelve mosaicos grises "Map data not yet available"
+          // a partir del siguiente nivel nativo. Limitamos la fuente a z18 y
+          // dejamos que MapLibre amplie ese ultimo mosaico disponible cuando el
+          // usuario siga acercando el mapa. Asi conservamos el zoom sin pedir
+          // tiles inexistentes a Esri.
+          maxzoom: 18,
           attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
         }
       },
       layers: [
-        { id: 'esri-satellite', type: 'raster', source: 'esri' }
+        {
+          id: 'esri-satellite',
+          type: 'raster',
+          source: 'esri',
+          paint: {
+            'raster-resampling': 'linear'
+          }
+        }
       ]
     }
   };
