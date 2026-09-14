@@ -11,7 +11,25 @@
   const SECTIONS_URL = './secciones-top.geojson';
   const MANZANAS_URL = './secciones.geojson';
   const CALIBRATION_KEY = 'jp-basemap-calibration-v2';
-  const VECTOR_CALIBRATION_KEY = 'jp-basemap-vector-calibration-v2';
+  const VECTOR_CALIBRATION_KEY = 'jp-basemap-vector-calibration-v3';
+
+  const DEFAULT_CALIBRATION = {
+    lat: 25.81632700772623,
+    lng: -100.15612317763441,
+    widthMeters: 516,
+    rotationDeg: 5.7,
+    opacity: 0.31,
+    visible: true
+  };
+
+  const DEFAULT_VECTOR_CALIBRATION = {
+    offsetEastMeters: 0,
+    offsetNorthMeters: 0,
+    scale: 1,
+    rotationDeg: 0,
+    flipHorizontal: false,
+    flipVertical: false
+  };
 
   const styles = {
     light: 'https://tiles.openfreemap.org/styles/positron',
@@ -38,24 +56,6 @@
   };
 
   const labels = { light: 'Light', satellite: 'Satélite' };
-
-  const DEFAULT_CALIBRATION = {
-    lat: 25.81632700772623,
-    lng: -100.15612317763441,
-    widthMeters: 516,
-    rotationDeg: 5.7,
-    opacity: 0.31,
-    visible: true
-  };
-
-  const DEFAULT_VECTOR_CALIBRATION = {
-    offsetEastMeters: 0,
-    offsetNorthMeters: 0,
-    scale: 1,
-    rotationDeg: 0,
-    flipHorizontal: false
-  };
-
   const $ = (id) => document.getElementById(id);
 
   const status = $('mapStatus');
@@ -79,6 +79,7 @@
   const sectionsVisible = $('sectionsVisible');
   const manzanasVisible = $('manzanasVisible');
   const vectorFlipHorizontal = $('vectorFlipHorizontal');
+  const vectorFlipVertical = $('vectorFlipVertical');
   const vectorStatus = $('vectorStatus');
   const vectorRotationRange = $('vectorRotationRange');
   const vectorRotationValue = $('vectorRotationValue');
@@ -94,6 +95,7 @@
   let sectionsRaw = null;
   let manzanasRaw = null;
   let normalizedManzanas = null;
+  let manzanaCenters = null;
 
   function loadCalibration() {
     try {
@@ -194,8 +196,9 @@
   function transformPoint(point, includeVectorAdjustment) {
     const base = sourcePointToMeters(point);
 
-    if (includeVectorAdjustment && vectorCalibration.flipHorizontal) {
-      base.east *= -1;
+    if (includeVectorAdjustment) {
+      if (vectorCalibration.flipHorizontal) base.east *= -1;
+      if (vectorCalibration.flipVertical) base.north *= -1;
     }
 
     const planRotated = rotateMeters(base.east, base.north, calibration.rotationDeg);
@@ -276,23 +279,72 @@
     };
   }
 
+  function averageRingPoint(ring) {
+    if (!Array.isArray(ring) || !ring.length) return null;
+    let x = 0;
+    let y = 0;
+    let count = 0;
+    ring.forEach(function (point) {
+      if (Array.isArray(point) && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1]))) {
+        x += Number(point[0]);
+        y += Number(point[1]);
+        count += 1;
+      }
+    });
+    return count ? [x / count, y / count] : null;
+  }
+
   function normalizeManzanasGeoJSON(data) {
     const features = data && Array.isArray(data.features) ? data.features : [];
     const normalized = [];
+    const centers = [];
 
-    features.forEach(function (feature) {
+    features.forEach(function (feature, index) {
       if (!feature || !feature.geometry) return;
+      const props = Object.assign({}, feature.properties || {}, { calibrationIndex: index });
+
       if (feature.geometry.type === 'Point') {
-        const converted = circlePointToPolygon(feature, 56);
+        const converted = circlePointToPolygon({
+          type: 'Feature',
+          id: feature.id,
+          properties: props,
+          geometry: feature.geometry
+        }, 56);
         if (converted) normalized.push(converted);
+        centers.push({
+          type: 'Feature',
+          properties: props,
+          geometry: { type: 'Point', coordinates: feature.geometry.coordinates }
+        });
         return;
       }
+
       if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
-        normalized.push(feature);
+        normalized.push({
+          type: 'Feature',
+          id: feature.id,
+          properties: props,
+          geometry: feature.geometry
+        });
+
+        let ring = null;
+        if (feature.geometry.type === 'Polygon') ring = feature.geometry.coordinates && feature.geometry.coordinates[0];
+        if (feature.geometry.type === 'MultiPolygon') ring = feature.geometry.coordinates && feature.geometry.coordinates[0] && feature.geometry.coordinates[0][0];
+        const center = averageRingPoint(ring);
+        if (center) {
+          centers.push({
+            type: 'Feature',
+            properties: props,
+            geometry: { type: 'Point', coordinates: center }
+          });
+        }
       }
     });
 
-    return { type: 'FeatureCollection', features: normalized };
+    return {
+      polygons: { type: 'FeatureCollection', features: normalized },
+      centers: { type: 'FeatureCollection', features: centers }
+    };
   }
 
   function syncCalibrationUi() {
@@ -313,6 +365,7 @@
     if (vectorScaleRange) vectorScaleRange.value = String(vectorCalibration.scale * 100);
     if (vectorScaleValue) vectorScaleValue.textContent = `${(vectorCalibration.scale * 100).toFixed(1)}%`;
     if (vectorFlipHorizontal) vectorFlipHorizontal.checked = Boolean(vectorCalibration.flipHorizontal);
+    if (vectorFlipVertical) vectorFlipVertical.checked = Boolean(vectorCalibration.flipVertical);
     if (sectionsVisible) sectionsVisible.checked = true;
     if (manzanasVisible) manzanasVisible.checked = true;
   }
@@ -362,6 +415,7 @@
     const sourceId = 'jdjp-sections';
     const layerId = 'jdjp-sections-line';
     const source = map.getSource(sourceId);
+    const visible = !sectionsVisible || sectionsVisible.checked;
 
     if (!source) {
       map.addSource(sourceId, { type: 'geojson', data: transformed });
@@ -369,7 +423,7 @@
         id: layerId,
         type: 'line',
         source: sourceId,
-        layout: { visibility: 'visible' },
+        layout: { visibility: visible ? 'visible' : 'none' },
         paint: {
           'line-color': '#006cff',
           'line-width': 3.2,
@@ -378,37 +432,57 @@
       });
     } else {
       source.setData(transformed);
-      if (map.getLayer(layerId)) {
-        map.setLayoutProperty(layerId, 'visibility', sectionsVisible && sectionsVisible.checked ? 'visible' : 'none');
-      }
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
     }
   }
 
   function ensureManzanaLayers() {
-    if (!map.isStyleLoaded() || !normalizedManzanas) return;
-    const transformed = transformGeoJSON(normalizedManzanas, true);
-    const sourceId = 'jdjp-manzanas';
+    if (!map.isStyleLoaded() || !normalizedManzanas || !manzanaCenters) return;
+
+    const polygons = transformGeoJSON(normalizedManzanas, true);
+    const centers = transformGeoJSON(manzanaCenters, true);
+    const visible = !manzanasVisible || manzanasVisible.checked;
+
+    const polygonSourceId = 'jdjp-manzanas';
+    const centerSourceId = 'jdjp-manzana-centers';
     const fillLayerId = 'jdjp-manzanas-fill';
     const lineLayerId = 'jdjp-manzanas-line';
-    const visible = !manzanasVisible || manzanasVisible.checked;
-    const source = map.getSource(sourceId);
+    const centerLayerId = 'jdjp-manzanas-centers';
 
-    if (!source) {
-      map.addSource(sourceId, { type: 'geojson', data: transformed });
+    let polygonSource = map.getSource(polygonSourceId);
+    if (!polygonSource) {
+      map.addSource(polygonSourceId, { type: 'geojson', data: polygons });
+    } else {
+      polygonSource.setData(polygons);
+    }
+
+    let centerSource = map.getSource(centerSourceId);
+    if (!centerSource) {
+      map.addSource(centerSourceId, { type: 'geojson', data: centers });
+    } else {
+      centerSource.setData(centers);
+    }
+
+    if (!map.getLayer(fillLayerId)) {
       map.addLayer({
         id: fillLayerId,
         type: 'fill',
-        source: sourceId,
+        source: polygonSourceId,
         layout: { visibility: visible ? 'visible' : 'none' },
         paint: {
           'fill-color': '#ff8a00',
-          'fill-opacity': 0.14
+          'fill-opacity': 0.12
         }
       });
+    } else {
+      map.setLayoutProperty(fillLayerId, 'visibility', visible ? 'visible' : 'none');
+    }
+
+    if (!map.getLayer(lineLayerId)) {
       map.addLayer({
         id: lineLayerId,
         type: 'line',
-        source: sourceId,
+        source: polygonSourceId,
         layout: { visibility: visible ? 'visible' : 'none' },
         paint: {
           'line-color': '#ff4d00',
@@ -417,14 +491,30 @@
         }
       });
     } else {
-      source.setData(transformed);
-      if (map.getLayer(fillLayerId)) map.setLayoutProperty(fillLayerId, 'visibility', visible ? 'visible' : 'none');
-      if (map.getLayer(lineLayerId)) map.setLayoutProperty(lineLayerId, 'visibility', visible ? 'visible' : 'none');
+      map.setLayoutProperty(lineLayerId, 'visibility', visible ? 'visible' : 'none');
+    }
+
+    if (!map.getLayer(centerLayerId)) {
+      map.addLayer({
+        id: centerLayerId,
+        type: 'circle',
+        source: centerSourceId,
+        layout: { visibility: visible ? 'visible' : 'none' },
+        paint: {
+          'circle-radius': 3.5,
+          'circle-color': '#ff4d00',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1
+        }
+      });
+    } else {
+      map.setLayoutProperty(centerLayerId, 'visibility', visible ? 'visible' : 'none');
     }
 
     try {
       if (map.getLayer(fillLayerId)) map.moveLayer(fillLayerId);
       if (map.getLayer(lineLayerId)) map.moveLayer(lineLayerId);
+      if (map.getLayer(centerLayerId)) map.moveLayer(centerLayerId);
     } catch (_) {}
   }
 
@@ -474,7 +564,7 @@
   }
 
   function setActiveButton(key) {
-    document.querySelectorAll('.basemap-option').forEach((button) => {
+    document.querySelectorAll('.basemap-option').forEach(function (button) {
       button.classList.toggle('active', button.dataset.basemap === key);
     });
   }
@@ -557,14 +647,17 @@
     calibration.visible = planVisible.checked;
     updateCalibration();
   });
-
   if (sectionsVisible) sectionsVisible.addEventListener('change', addOrUpdateVectorOverlays);
   if (manzanasVisible) manzanasVisible.addEventListener('change', addOrUpdateVectorOverlays);
+
   if (vectorFlipHorizontal) vectorFlipHorizontal.addEventListener('change', function () {
     vectorCalibration.flipHorizontal = vectorFlipHorizontal.checked;
     updateVectorCalibration();
   });
-
+  if (vectorFlipVertical) vectorFlipVertical.addEventListener('change', function () {
+    vectorCalibration.flipVertical = vectorFlipVertical.checked;
+    updateVectorCalibration();
+  });
   if (vectorRotationRange) vectorRotationRange.addEventListener('input', function () {
     vectorCalibration.rotationDeg = Number(vectorRotationRange.value);
     updateVectorCalibration();
@@ -583,9 +676,7 @@
 
   document.querySelectorAll('[data-vector-nudge]').forEach(function (button) {
     const direction = button.dataset.vectorNudge;
-    if (['north', 'south', 'east', 'west'].includes(direction)) {
-      button.addEventListener('click', function () { nudgeVectors(direction); });
-    }
+    button.addEventListener('click', function () { nudgeVectors(direction); });
   });
 
   if (useMapCenterBtn) useMapCenterBtn.addEventListener('click', function () {
@@ -630,7 +721,7 @@
     }
   });
 
-  document.querySelectorAll('.basemap-option').forEach((button) => {
+  document.querySelectorAll('.basemap-option').forEach(function (button) {
     button.addEventListener('click', function () { requestBasemap(button.dataset.basemap); });
   });
 
@@ -639,22 +730,23 @@
   updateVectorStatus();
 
   Promise.all([
-    fetch(SECTIONS_URL, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`Secciones HTTP ${r.status}`);
-      return r.json();
+    fetch(SECTIONS_URL, { cache: 'no-store' }).then(function (response) {
+      if (!response.ok) throw new Error(`Secciones HTTP ${response.status}`);
+      return response.json();
     }),
-    fetch(MANZANAS_URL, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`Manzanas HTTP ${r.status}`);
-      return r.json();
+    fetch(MANZANAS_URL, { cache: 'no-store' }).then(function (response) {
+      if (!response.ok) throw new Error(`Manzanas HTTP ${response.status}`);
+      return response.json();
     })
   ]).then(function (results) {
     sectionsRaw = results[0];
     manzanasRaw = results[1];
-    normalizedManzanas = normalizeManzanasGeoJSON(manzanasRaw);
 
-    if (sectionsVisible) sectionsVisible.checked = true;
+    const normalized = normalizeManzanasGeoJSON(manzanasRaw);
+    normalizedManzanas = normalized.polygons;
+    manzanaCenters = normalized.centers;
+
     if (manzanasVisible) manzanasVisible.checked = true;
-
     updateVectorStatus();
     restorePreviewLayers();
 
@@ -662,7 +754,7 @@
       secciones: sectionsRaw.features ? sectionsRaw.features.length : 0,
       manzanasOriginales: manzanasRaw.features ? manzanasRaw.features.length : 0,
       manzanasRenderizadas: normalizedManzanas.features ? normalizedManzanas.features.length : 0,
-      flipHorizontal: vectorCalibration.flipHorizontal
+      centrosManzana: manzanaCenters.features ? manzanaCenters.features.length : 0
     });
   }).catch(function (error) {
     console.error('[Calibration] No fue posible cargar los GeoJSON.', error);
