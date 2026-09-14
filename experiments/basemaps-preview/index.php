@@ -45,17 +45,9 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
         <span class="basemap-thumb thumb-light"></span>
         <span><strong>Light</strong><small>OpenFreeMap Positron</small></span>
       </button>
-      <button type="button" class="basemap-option" data-basemap="standard">
-        <span class="basemap-thumb thumb-standard"></span>
-        <span><strong>OpenStreetMap</strong><small>Standard</small></span>
-      </button>
       <button type="button" class="basemap-option" data-basemap="satellite">
         <span class="basemap-thumb thumb-satellite"></span>
         <span><strong>Satélite</strong><small>Esri World Imagery</small></span>
-      </button>
-      <button type="button" class="basemap-option" data-basemap="satelliteClarity">
-        <span class="basemap-thumb thumb-satellite"></span>
-        <span><strong>Satélite Clarity</strong><small>Esri archivo · prueba</small></span>
       </button>
     </section>
 
@@ -68,7 +60,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
       <div class="preview-info-row"><span>Zoom</span><strong id="zoomLabel">16.4</strong></div>
       <div class="preview-next">
         <strong>Siguiente etapa</strong>
-        <span>Calibrar puntos del plano actual contra estas coordenadas GPS y superponer el linework.</span>
+        <span>Calibrar puntos del plano actual contra estas coordenadas GPS, incluyendo rotación, escala y desplazamiento.</span>
       </div>
     </aside>
 
@@ -76,6 +68,6 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   </main>
 
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="./basemaps-preview.js?v=2"></script>
+  <script src="./basemaps-preview.js?v=3"></script>
 </body>
 </html>
