@@ -3,6 +3,7 @@
 
   const CENTER = [-100.15610, 25.81662];
   const START_ZOOM = 16.4;
+  const SATELLITE_CLEAR_MAX_ZOOM = 18.0;
 
   function rasterStyle(id, url, maxzoom, attribution) {
     return {
@@ -37,20 +38,13 @@
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       18,
       'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
-    ),
-    satelliteClarity: rasterStyle(
-      'esri-world-imagery-clarity',
-      'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      19,
-      'Tiles &copy; Esri &mdash; World Imagery (Clarity)'
     )
   };
 
   const labels = {
     light: 'Light',
     standard: 'OpenStreetMap',
-    satellite: 'Satélite',
-    satelliteClarity: 'Satélite Clarity'
+    satellite: 'Satélite'
   };
 
   const status = document.getElementById('mapStatus');
@@ -58,12 +52,24 @@
   const centerLabel = document.getElementById('centerLabel');
   const zoomLabel = document.getElementById('zoomLabel');
 
-  function setStatus(text, hideLater) {
+  let currentBasemap = 'light';
+  let statusTimer = null;
+
+  function setStatus(text, hideAfterMs) {
     if (!status) return;
+    if (statusTimer) {
+      window.clearTimeout(statusTimer);
+      statusTimer = null;
+    }
+
     status.textContent = text;
     status.classList.remove('hidden');
-    if (hideLater) {
-      window.setTimeout(() => status.classList.add('hidden'), 700);
+
+    if (hideAfterMs && hideAfterMs > 0) {
+      statusTimer = window.setTimeout(function () {
+        status.classList.add('hidden');
+        statusTimer = null;
+      }, hideAfterMs);
     }
   }
 
@@ -124,46 +130,89 @@
     });
   }
 
-  function applyBasemap(key) {
-    if (!styles[key]) return;
-    setStatus(`Cargando ${labels[key]}…`, false);
-    map.setStyle(styles[key], { diff: false });
-    modeLabel.textContent = labels[key];
-    localStorage.setItem('jp-basemap-preview', key);
-
+  function setActiveButton(key) {
     document.querySelectorAll('.basemap-option').forEach((button) => {
       button.classList.toggle('active', button.dataset.basemap === key);
     });
+  }
+
+  function satelliteResolutionMessage() {
+    return 'El satélite llegó a su nivel máximo de detalle. Se cambió automáticamente a Light para mantener una vista nítida.';
+  }
+
+  function applyBasemap(key, options) {
+    const config = options || {};
+    if (!styles[key]) return;
+
+    currentBasemap = key;
+    setStatus(`Cargando ${labels[key]}…`, 0);
+    map.setStyle(styles[key], { diff: false });
+    modeLabel.textContent = labels[key];
+    localStorage.setItem('jp-basemap-preview', key);
+    setActiveButton(key);
 
     map.once('styledata', function () {
       try { markParkReference(); } catch (_) {}
     });
+
     map.once('idle', function () {
-      setStatus(`${labels[key]} listo`, true);
+      if (config.notice) {
+        setStatus(config.notice, 5200);
+      } else {
+        setStatus(`${labels[key]} listo`, 700);
+      }
     });
+  }
+
+  function requestBasemap(key) {
+    if (key === 'satellite' && map.getZoom() > SATELLITE_CLEAR_MAX_ZOOM) {
+      const message = satelliteResolutionMessage();
+      if (currentBasemap !== 'light') {
+        applyBasemap('light', { notice: message });
+      } else {
+        setActiveButton('light');
+        modeLabel.textContent = labels.light;
+        localStorage.setItem('jp-basemap-preview', 'light');
+        setStatus(message, 5200);
+      }
+      return;
+    }
+
+    applyBasemap(key);
   }
 
   document.querySelectorAll('.basemap-option').forEach((button) => {
     button.addEventListener('click', function () {
-      applyBasemap(button.dataset.basemap);
+      requestBasemap(button.dataset.basemap);
     });
   });
 
   map.on('load', function () {
     markParkReference();
     updateLocationReadout();
+
     const saved = localStorage.getItem('jp-basemap-preview');
     if (saved && saved !== 'light' && styles[saved]) {
-      applyBasemap(saved);
+      requestBasemap(saved);
     } else {
-      setStatus('Light listo', true);
+      currentBasemap = 'light';
+      setActiveButton('light');
+      setStatus('Light listo', 700);
     }
   });
 
   map.on('moveend', updateLocationReadout);
-  map.on('zoomend', updateLocationReadout);
+
+  map.on('zoomend', function () {
+    updateLocationReadout();
+
+    if (currentBasemap === 'satellite' && map.getZoom() > SATELLITE_CLEAR_MAX_ZOOM) {
+      applyBasemap('light', { notice: satelliteResolutionMessage() });
+    }
+  });
+
   map.on('error', function (event) {
     console.error('[Basemaps Preview]', event && event.error ? event.error : event);
-    setStatus('No se pudo cargar una parte del mapa. Revisa la consola.', false);
+    setStatus('No se pudo cargar una parte del mapa. Revisa la consola.', 0);
   });
 })();
