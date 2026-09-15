@@ -73,9 +73,12 @@ jobs:
           php -l deploy-basemaps-preview/inventory.php
           node --check deploy-basemaps-preview/app.js
           node --check deploy-basemaps-preview/production-basemap-toggle.js
+          node --check deploy-basemaps-preview/route-editor.js
           test -s deploy-basemaps-preview/base-lines.webp
           test -s deploy-basemaps-preview/satellite-base.webp
+          test -s deploy-basemaps-preview/data/rutas-panteon.geojson
           python3 - <<'PY'
+          import json
           from PIL import Image
           from pathlib import Path
 
@@ -83,8 +86,6 @@ jobs:
           lines = Image.open(root / 'base-lines.webp')
           sat = Image.open(root / 'satellite-base.webp')
 
-          # Las lineas cubren exactamente el plano. El satelite cubre una zona
-          # mayor alrededor del panteon, por lo que DEBE ser mas grande.
           if sat.width <= lines.width or sat.height <= lines.height:
               raise SystemExit(f'El satelite no esta extendido: lineas={lines.size}, satelite={sat.size}')
 
@@ -100,8 +101,17 @@ jobs:
           if extrema[0] != 0 or extrema[1] == 0:
               raise SystemExit(f'Alpha invalido en plano transparente: {extrema}')
 
+          routes_path = root / 'data' / 'rutas-panteon.geojson'
+          with routes_path.open('r', encoding='utf-8') as fh:
+              routes = json.load(fh)
+          if routes.get('type') != 'FeatureCollection':
+              raise SystemExit('rutas-panteon.geojson no es FeatureCollection')
+          if routes.get('properties', {}).get('schema') != 'jp-routing-v1':
+              raise SystemExit('Schema de rutas invalido')
+
           print(f'Lineas transparentes: {lines.size}; alpha={extrema}')
           print(f'Satelite extendido: {sat.size}')
+          print(f'Editor de rutas validado: {len(routes.get("features", []))} features base')
           PY
           du -sh deploy-basemaps-preview
 
@@ -117,6 +127,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v11.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v12.json
           dry-run: false
           log-level: standard
