@@ -64,14 +64,23 @@ jobs:
             tools/build_nichos_v2_preview.py \
             tools/apply_nichos_v2_v11.py \
             tools/apply_nichos_v2_png_v12.py \
-            tools/apply_nichos_v2_production.py
+            tools/apply_nichos_v2_production.py \
+            experiments/basemaps-preview/install-production-features.py \
+            experiments/basemaps-preview/install-mobile-search.py \
+            experiments/basemaps-preview/build_preview_assets.py
           python3 tools/build_portal_map.py
           python3 tools/apply_nichos_v2_production.py
 
           # Produccion usa la sesion PHP del Portal para consultar SharePoint.
-          # Sustituimos el cliente MSAL generado por el builder y agregamos el endpoint PHP.
           cp src/js/sharepoint-inventario-portal.js deploy/sharepoint-inventario.js
           cp inventory.php deploy/inventory.php
+
+          # Integra las funciones validadas en preview-basemaps sobre el mapa productivo.
+          python3 experiments/basemaps-preview/install-production-features.py deploy
+          python3 experiments/basemaps-preview/install-mobile-search.py deploy
+          python3 experiments/basemaps-preview/build_preview_assets.py \
+            deploy/assets/map/base-public.webp \
+            deploy
 
           mkdir -p deploy/vendor
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
@@ -98,6 +107,21 @@ jobs:
             deploy/nichos-v2-preview.css
             deploy/nichos-v2-map-integration.js
             deploy/performance-optimizations.js
+            deploy/production-basemap-toggle.js
+            deploy/production-basemap-toggle.css
+            deploy/route-editor.js
+            deploy/route-editor-events-fix.js
+            deploy/route-editor.css
+            deploy/route-graph.js
+            deploy/route-render.js
+            deploy/route-lot-hook.js
+            deploy/route-nicho-hook.js
+            deploy/route-toolbar.js
+            deploy/route-navigation.css
+            deploy/mobile-search-menu.js
+            deploy/mobile-search-menu.css
+            deploy/base-lines.webp
+            deploy/satellite-base.webp
             deploy/assets/logo.jpg
             deploy/assets/map/base-public.webp
             deploy/assets/americano-01.webp
@@ -128,6 +152,8 @@ jobs:
             deploy/data/SPN-concavo.geojson
             deploy/data/SPN-convexo.geojson
             deploy/data/nichos-zonas.geojson
+            deploy/data/rutas-panteon.geojson
+            deploy/data/rutas-panteon-compact.json
           )
 
           for file in "${required_files[@]}"; do
@@ -151,6 +177,15 @@ jobs:
           node --check deploy/nichos-v2-map-integration.js
           node --check deploy/performance-optimizations.js
           node --check deploy/sharepoint-inventario.js
+          node --check deploy/production-basemap-toggle.js
+          node --check deploy/route-editor.js
+          node --check deploy/route-editor-events-fix.js
+          node --check deploy/route-graph.js
+          node --check deploy/route-render.js
+          node --check deploy/route-lot-hook.js
+          node --check deploy/route-nicho-hook.js
+          node --check deploy/route-toolbar.js
+          node --check deploy/mobile-search-menu.js
 
           require_contains() {
             local file="$1"
@@ -159,7 +194,7 @@ jobs:
             if ! grep -Fq "$needle" "$file"; then
               echo "::error::$label no encontrado en $file: $needle"
               echo "--- Referencias relevantes de $file ---"
-              grep -nE 'lotes-nv2|nichos-v2|performance-optimizations|section-visual|jp-inventory|SPN-concavo|PREVIEW_ROOT|inventory.php|portal-session' "$file" || true
+              grep -nE 'lotes-nv2|nichos-v2|performance-optimizations|section-visual|jp-inventory|SPN-concavo|PREVIEW_ROOT|inventory.php|portal-session|route-|basemap|mobile-search' "$file" || true
               exit 1
             fi
           }
@@ -172,6 +207,10 @@ jobs:
           require_contains deploy/index.php 'nichos-v2-preview.js' 'Runtime de Nichos V2'
           require_contains deploy/index.php 'nichos-v2-map-integration.js' 'Integracion de Nichos V2'
           require_contains deploy/index.php 'performance-optimizations.js' 'Optimizaciones de rendimiento'
+          require_contains deploy/index.php 'production-basemap-toggle.js?v=5' 'Selector Light/Satelite'
+          require_contains deploy/index.php 'route-toolbar.js?v=2' 'Como llegar'
+          require_contains deploy/index.php 'route-editor.js?v=3' 'Editor de rutas'
+          require_contains deploy/index.php 'mobile-search-menu.js?v=1' 'Buscador movil desplegable'
 
           require_contains deploy/nichos-v2-preview.js "const PREVIEW_ROOT = '/mapa';" 'Root productivo de Nichos V2'
           require_contains deploy/nichos-v2-preview.js 'SPN-concavo.webp' 'Imagen WebP optimizada de Nichos V2'
@@ -185,10 +224,15 @@ jobs:
           require_contains deploy/sharepoint-inventario.js 'jp-inventory-updated' 'Evento de inventario'
           require_contains deploy/inventory.php 'portal_require_authentication' 'Proteccion del endpoint de inventario'
           require_contains deploy/inventory.php 'portal_graph_app_token' 'Consulta de SharePoint desde backend'
+          require_contains deploy/production-basemap-toggle.js 'satellite-base.webp' 'Raster satelital'
+          require_contains deploy/production-basemap-toggle.js 'base-lines.webp' 'Plano transparente'
+          require_contains deploy/route-toolbar.js 'routeBtn' 'Boton global Como llegar'
+          require_contains deploy/mobile-search-menu.js 'BACK_EXTERNAL_CLASS' 'Volver externo en movil'
 
           python3 - <<'PY'
           import json
           from pathlib import Path
+          from PIL import Image
 
           files = list(Path('deploy/data').rglob('*.json')) + list(Path('deploy/data').rglob('*.geojson'))
           if not files:
@@ -215,6 +259,19 @@ jobs:
               actual = len(data.get('features', []))
               if actual != count:
                   raise SystemExit(f'Conteo invalido en {name}: {actual} != {count}')
+
+          compact = json.loads(Path('deploy/data/rutas-panteon-compact.json').read_text(encoding='utf-8'))
+          if len(compact.get('r') or []) != 95:
+              raise SystemExit(f"Red vial inesperada: {len(compact.get('r') or [])} tramos")
+          if compact.get('e') != [8512, 2672]:
+              raise SystemExit('Entrada principal inesperada en la red vial')
+
+          lines = Image.open('deploy/base-lines.webp')
+          satellite = Image.open('deploy/satellite-base.webp')
+          if lines.size != satellite.size:
+              raise SystemExit(f'Activos base desalineados: {lines.size} != {satellite.size}')
+          if 'A' not in lines.getbands():
+              raise SystemExit('El plano transparente no contiene canal alpha')
 
           print(f'Validados correctamente {len(files)} archivos JSON/GeoJSON.')
           PY
@@ -244,7 +301,22 @@ jobs:
             nichos-v2-preview.js \
             nichos-v2-preview.css \
             nichos-v2-map-integration.js \
-            performance-optimizations.js; do
+            performance-optimizations.js \
+            production-basemap-toggle.js \
+            production-basemap-toggle.css \
+            route-editor.js \
+            route-editor-events-fix.js \
+            route-editor.css \
+            route-graph.js \
+            route-render.js \
+            route-lot-hook.js \
+            route-nicho-hook.js \
+            route-toolbar.js \
+            route-navigation.css \
+            mobile-search-menu.js \
+            mobile-search-menu.css \
+            base-lines.webp \
+            satellite-base.webp; do
             cp "deploy/$file" "deploy-code/$file"
           done
 
@@ -274,7 +346,9 @@ jobs:
             SPN-convexo.geojson \
             lotes.json \
             paquetes.json \
-            inventario-overrides.json; do
+            inventario-overrides.json \
+            rutas-panteon.geojson \
+            rutas-panteon-compact.json; do
             cp "deploy/data/$file" "deploy-code/data/$file"
           done
 
@@ -371,7 +445,7 @@ jobs:
           timeout: 300000
           local-dir: ./deploy-code/
           server-dir: ./
-          state-name: .ftp-deploy-sync-state-code-v3.json
+          state-name: .ftp-deploy-sync-state-code-v4.json
           dry-run: false
           log-level: standard
 
