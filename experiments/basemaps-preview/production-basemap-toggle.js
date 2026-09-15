@@ -54,6 +54,11 @@
     window.L.__jpBasemapCaptureInstalled = true;
   }
 
+  // Este archivo se carga inmediatamente despues de Leaflet y ANTES de app.js.
+  // Capturamos L.map ahora para reutilizar exactamente la misma instancia del
+  // mapa productivo, en vez de reconstruir sus funciones en MapLibre.
+  installLeafletCapture();
+
   function findBaseOverlay() {
     if (!leafletMap) return null;
     let candidate = null;
