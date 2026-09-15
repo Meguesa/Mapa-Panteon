@@ -75,11 +75,19 @@ jobs:
           node --check deploy-basemaps-preview/production-basemap-toggle.js
           node --check deploy-basemaps-preview/route-editor.js
           node --check deploy-basemaps-preview/route-editor-events-fix.js
+          node --check deploy-basemaps-preview/route-graph.js
+          node --check deploy-basemaps-preview/route-render.js
+          node --check deploy-basemaps-preview/route-lot-hook.js
+          node --check deploy-basemaps-preview/route-nicho-hook.js
+          test -s deploy-basemaps-preview/route-navigation.css
           test -s deploy-basemaps-preview/base-lines.webp
           test -s deploy-basemaps-preview/satellite-base.webp
           test -s deploy-basemaps-preview/data/rutas-panteon.geojson
+          test -s deploy-basemaps-preview/data/rutas-panteon-compact.json
+
           python3 - <<'PY'
           import json
+          from collections import defaultdict
           from PIL import Image
           from pathlib import Path
 
@@ -109,10 +117,48 @@ jobs:
               raise SystemExit('rutas-panteon.geojson no es FeatureCollection')
           if routes.get('properties', {}).get('schema') != 'jp-routing-v1':
               raise SystemExit('Schema de rutas invalido')
+          if len(routes.get('features', [])) != 96:
+              raise SystemExit(f'Red completa inesperada: {len(routes.get("features", []))} features')
+
+          compact_path = root / 'data' / 'rutas-panteon-compact.json'
+          compact = json.loads(compact_path.read_text(encoding='utf-8'))
+          if compact.get('e') != [8512, 2672]:
+              raise SystemExit('Entrada principal inesperada')
+          if len(compact.get('r', [])) != 95:
+              raise SystemExit(f'Tramos inesperados: {len(compact.get("r", []))}')
+
+          def k(c):
+              return (round(float(c[0]), 3), round(float(c[1]), 3))
+
+          adj = defaultdict(set)
+          for _, coords in compact['r']:
+              for a, b in zip(coords, coords[1:]):
+                  ka, kb = k(a), k(b)
+                  adj[ka].add(kb)
+                  adj[kb].add(ka)
+
+          seen = set()
+          components = 0
+          for node in adj:
+              if node in seen:
+                  continue
+              components += 1
+              stack = [node]
+              while stack:
+                  cur = stack.pop()
+                  if cur in seen:
+                      continue
+                  seen.add(cur)
+                  stack.extend(adj[cur] - seen)
+
+          if components != 1:
+              raise SystemExit(f'La red de navegacion tiene {components} componentes')
+          if k(compact['e']) not in adj:
+              raise SystemExit('La entrada principal no esta conectada al grafo')
 
           print(f'Lineas transparentes: {lines.size}; alpha={extrema}')
           print(f'Satelite extendido: {sat.size}')
-          print(f'Editor de rutas validado: {len(routes.get("features", []))} features base')
+          print(f'Red de rutas validada: 95 tramos, {len(adj)} nodos, 1 componente')
           PY
           du -sh deploy-basemaps-preview
 
@@ -128,6 +174,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v13.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v14.json
           dry-run: false
           log-level: standard
