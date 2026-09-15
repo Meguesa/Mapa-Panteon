@@ -1,0 +1,271 @@
+.jp-route-editor-panel {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1400;
+  width: min(340px, calc(100% - 28px));
+  max-height: calc(100% - 28px);
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid rgba(27, 61, 89, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 252, 245, 0.97);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2);
+  color: #18344b;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  backdrop-filter: blur(7px);
+}
+
+.jp-route-editor-panel * {
+  box-sizing: border-box;
+}
+
+.jp-route-editor-panel h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.jp-route-editor-panel p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #657786;
+}
+
+.jp-route-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e6dccb;
+}
+
+.jp-route-editor-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e8f2f9;
+  color: #0d5a87;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.jp-route-editor-section {
+  padding: 12px 0;
+  border-bottom: 1px solid #eadfce;
+}
+
+.jp-route-editor-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.jp-route-editor-section h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #18344b;
+}
+
+.jp-route-editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.jp-route-editor-grid .jp-route-full {
+  grid-column: 1 / -1;
+}
+
+.jp-route-editor-panel button,
+.jp-route-editor-panel select,
+.jp-route-editor-panel label.jp-route-file-label {
+  min-height: 36px;
+  border: 1px solid #cad5de;
+  border-radius: 9px;
+  background: #fff;
+  color: #173650;
+  font: inherit;
+  font-size: 12px;
+}
+
+.jp-route-editor-panel button,
+.jp-route-editor-panel label.jp-route-file-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 10px;
+  font-weight: 800;
+  cursor: pointer;
+  text-align: center;
+}
+
+.jp-route-editor-panel button:hover,
+.jp-route-editor-panel label.jp-route-file-label:hover {
+  border-color: #78a9c8;
+  background: #f0f7fb;
+}
+
+.jp-route-editor-panel button.jp-route-primary {
+  border-color: #1c6694;
+  background: #236b99;
+  color: #fff;
+}
+
+.jp-route-editor-panel button.jp-route-primary:hover {
+  background: #195b85;
+}
+
+.jp-route-editor-panel button.jp-route-danger {
+  border-color: #d7b4b4;
+  color: #9e2f2f;
+}
+
+.jp-route-editor-panel button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jp-route-editor-panel select {
+  width: 100%;
+  padding: 0 9px;
+}
+
+.jp-route-editor-status {
+  margin-top: 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #f3f7fa;
+  color: #38556b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.jp-route-editor-status.is-drawing {
+  background: #fff3cf;
+  color: #765700;
+}
+
+.jp-route-editor-status.is-entrance {
+  background: #e7f6eb;
+  color: #27643a;
+}
+
+.jp-route-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.jp-route-stat {
+  padding: 8px;
+  border: 1px solid #e5ded1;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.jp-route-stat strong {
+  display: block;
+  font-size: 15px;
+  color: #173650;
+}
+
+.jp-route-stat span {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: #71808d;
+}
+
+.jp-route-warning {
+  display: none;
+  margin-top: 8px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: #fff0e7;
+  color: #914d23;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.jp-route-warning.is-visible {
+  display: block;
+}
+
+.jp-route-help {
+  margin: 0;
+  padding-left: 18px;
+  color: #5c6e7a;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.jp-route-help li + li {
+  margin-top: 4px;
+}
+
+.jp-route-editor-panel input[type="checkbox"] {
+  accent-color: #236b99;
+}
+
+.jp-route-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  font-size: 11px;
+  color: #556a79;
+}
+
+.jp-route-selected {
+  min-height: 30px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #f7f4ee;
+  color: #556a79;
+  font-size: 11px;
+}
+
+#map.jp-route-editor-active {
+  cursor: crosshair;
+}
+
+/* Durante la edicion, los polígonos existentes no interceptan clics. */
+#map.jp-route-editor-active .leaflet-overlay-pane svg path {
+  pointer-events: none !important;
+}
+
+#map.jp-route-editor-active .jp-route-editor-pane svg path {
+  pointer-events: auto !important;
+}
+
+#map.jp-route-editor-active .jp-route-editor-pane {
+  pointer-events: auto !important;
+}
+
+.jp-route-editor-vertex {
+  pointer-events: none !important;
+}
+
+.jp-route-file-input {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .jp-route-editor-panel {
+    top: auto;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+    max-height: 48vh;
+  }
+
+  .jp-route-editor-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
