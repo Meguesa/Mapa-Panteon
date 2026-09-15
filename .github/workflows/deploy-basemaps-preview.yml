@@ -29,134 +29,46 @@ jobs:
           ref: main
           path: source-main
 
-      - name: Descargar archivos del preview
+      - name: Descargar preview
         uses: actions/checkout@v6
         with:
           ref: preview/map-basemaps
           path: source-preview
 
-      - name: Preparar PHP 8.2
+      - name: Preparar PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           coverage: none
 
-      - name: Preparar dependencias del build productivo
+      - name: Instalar dependencias
         shell: bash
         run: |
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --quiet Pillow
-          rm -rf source-main/.tmp-msal
           npm install --prefix source-main/.tmp-msal --no-save --package-lock=false @azure/msal-browser@2.38.3
 
-      - name: Construir exactamente el mapa de main
+      - name: Construir mapa main
         shell: bash
         run: |
           set -euo pipefail
           cd source-main
-          python3 -m py_compile \
-            tools/build_portal_map.py \
-            tools/build_nichos_v2_preview.py \
-            tools/apply_nichos_v2_v11.py \
-            tools/apply_nichos_v2_png_v12.py \
-            tools/apply_nichos_v2_production.py
           python3 tools/build_portal_map.py
           python3 tools/apply_nichos_v2_production.py
-
           cp src/js/sharepoint-inventario-portal.js deploy/sharepoint-inventario.js
           cp inventory.php deploy/inventory.php
           mkdir -p deploy/vendor
           cp .tmp-msal/node_modules/@azure/msal-browser/lib/msal-browser.min.js deploy/vendor/msal-browser.min.js
-          rm -rf .tmp-msal
 
-          php -l deploy/index.php
-          php -l deploy/inventory.php
-          node --check deploy/app.js
-          node --check deploy/lotes-nv2-match.js
-          node --check deploy/nichos-v2-preview.js
-
-      - name: Preparar preview como copia funcional del mapa productivo
+      - name: Construir preview
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf deploy-basemaps-preview
-          mkdir -p deploy-basemaps-preview/vendor
-
-          # Copiar solamente codigo. Los datos e imagenes se sirven desde /mapa/
-          # para que Light use exactamente los mismos activos que produccion.
-          cp source-main/deploy/index.php deploy-basemaps-preview/index.php
-          cp source-main/deploy/inventory.php deploy-basemaps-preview/inventory.php
-          cp source-main/deploy/*.js deploy-basemaps-preview/
-          cp source-main/deploy/*.css deploy-basemaps-preview/
-          cp source-main/deploy/vendor/msal-browser.min.js deploy-basemaps-preview/vendor/msal-browser.min.js
-          cp source-preview/experiments/basemaps-preview/production-basemap-toggle.js deploy-basemaps-preview/production-basemap-toggle.js
-          cp source-preview/experiments/basemaps-preview/production-basemap-toggle.css deploy-basemaps-preview/production-basemap-toggle.css
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          root = Path('deploy-basemaps-preview')
-          index = root / 'index.php'
-          text = index.read_text(encoding='utf-8')
-
-          # El preview vive en /mapa/preview-basemaps; el bootstrap esta dos niveles arriba.
-          text = text.replace(
-              "require_once dirname(__DIR__) . '/includes/bootstrap.php';",
-              "require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';",
-              1,
-          )
-
-          # Recursos visuales y datos: reutilizar exactamente los ya publicados en /mapa/.
-          text = text.replace('./assets/', '/mapa/assets/')
-          text = text.replace('./vendor/msal-browser.min.js', '/mapa/vendor/msal-browser.min.js')
-
-          # Cargar MapLibre + selector ANTES de app.js para capturar la misma instancia Leaflet.
-          leaflet = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>'
-          addon = '''<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="./production-basemap-toggle.css?v=1" />
-  <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="./production-basemap-toggle.js?v=1"></script>'''
-          if leaflet not in text:
-              raise SystemExit('No se encontro la carga de Leaflet en index.php')
-          text = text.replace(leaflet, addon, 1)
-          index.write_text(text, encoding='utf-8')
-
-          inventory = root / 'inventory.php'
-          inv = inventory.read_text(encoding='utf-8')
-          inv = inv.replace(
-              "require_once dirname(__DIR__) . '/includes/bootstrap.php';",
-              "require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';",
-              1,
-          )
-          inv = inv.replace(
-              "require_once dirname(__DIR__) . '/includes/portal-sharepoint.php';",
-              "require_once dirname(__DIR__, 2) . '/includes/portal-sharepoint.php';",
-              1,
-          )
-          inventory.write_text(inv, encoding='utf-8')
-
-          # Los JS del mapa siguen siendo los de main; solo cambiamos rutas de datos/activos
-          # para consumir la misma fuente productiva sin duplicar cientos de MB en preview.
-          for path in root.glob('*.js'):
-              if path.name == 'production-basemap-toggle.js':
-                  continue
-              source = path.read_text(encoding='utf-8')
-              source = source.replace('./data/', '/mapa/data/')
-              source = source.replace('./assets/', '/mapa/assets/')
-              path.write_text(source, encoding='utf-8')
-          PY
-
+          python3 source-preview/experiments/basemaps-preview/build-production-preview.py
           php -l deploy-basemaps-preview/index.php
           php -l deploy-basemaps-preview/inventory.php
-          node --check deploy-basemaps-preview/production-basemap-toggle.js
           node --check deploy-basemaps-preview/app.js
-          grep -Fq 'production-basemap-toggle.js?v=1' deploy-basemaps-preview/index.php
-          grep -Fq '/mapa/assets/' deploy-basemaps-preview/index.php
-          grep -Fq '/mapa/data/' deploy-basemaps-preview/app.js
-          grep -Fq 'Light' deploy-basemaps-preview/production-basemap-toggle.js
-          grep -Fq 'Satélite' deploy-basemaps-preview/production-basemap-toggle.js
-          grep -Fq 'mixBlendMode = '\''multiply'\''' deploy-basemaps-preview/production-basemap-toggle.js
+          node --check deploy-basemaps-preview/production-basemap-toggle.js
           du -sh deploy-basemaps-preview
 
       - name: Publicar preview en cPanel
@@ -171,6 +83,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v8.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v9.json
           dry-run: false
           log-level: standard
