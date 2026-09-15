@@ -1,0 +1,85 @@
+.jp-basemap-preview-switcher {
+  position: absolute;
+  top: 14px;
+  left: 60px;
+  z-index: 1200;
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(15, 39, 64, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(5px);
+}
+
+.jp-basemap-preview-switcher button {
+  min-width: 92px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #173650;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.jp-basemap-preview-switcher button:hover {
+  background: #f3f7fa;
+}
+
+.jp-basemap-preview-switcher button.is-active {
+  border-color: #8bb7d8;
+  background: #eaf4fb;
+  color: #0f4c78;
+}
+
+.jp-basemap-preview-switcher button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.jp-satellite-underlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  background: #fff;
+}
+
+.jp-satellite-underlay .maplibregl-map,
+.jp-satellite-underlay .maplibregl-canvas-container,
+.jp-satellite-underlay canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#map.jp-satellite-mode {
+  background: transparent !important;
+}
+
+#map.jp-satellite-mode .leaflet-container,
+#map.jp-satellite-mode .leaflet-pane,
+#map.jp-satellite-mode .leaflet-map-pane {
+  background: transparent !important;
+}
+
+@media (max-width: 720px) {
+  .jp-basemap-preview-switcher {
+    top: 10px;
+    left: 54px;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .jp-basemap-preview-switcher button {
+    min-width: 74px;
+    height: 32px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+}
