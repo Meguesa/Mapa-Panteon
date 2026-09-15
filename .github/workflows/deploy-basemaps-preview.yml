@@ -38,6 +38,7 @@ jobs:
           php -l experiments/basemaps-preview/index.php
           php -l inventory.php
           node --check experiments/basemaps-preview/basemaps-preview.js
+          node --check experiments/basemaps-preview/basemaps-runtime-overrides.js
           node --check experiments/basemaps-preview/inventory-preview.js
           node --check experiments/basemaps-preview/lots-preview.js
           test -s experiments/basemaps-preview/basemaps-preview.css
@@ -57,10 +58,14 @@ jobs:
           grep -Fq 'tiles.openfreemap.org/styles/positron' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'World_Imagery/MapServer/tile' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'PLAN_IMAGE_URL' experiments/basemaps-preview/basemaps-preview.js
-          grep -Fq 'SATELLITE_CLEAR_MAX_ZOOM = 18.65' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'widthMeters: 516' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'rotationDeg: 5.7' experiments/basemaps-preview/basemaps-preview.js
           grep -Fq 'flipVertical: true' experiments/basemaps-preview/index.php
+          grep -Fq '516 m · aprobado' experiments/basemaps-preview/index.php
+          grep -Fq 'basemaps-runtime-overrides.js?v=1' experiments/basemaps-preview/index.php
+          grep -Fq 'MAX_MAP_ZOOM = 22' experiments/basemaps-preview/basemaps-runtime-overrides.js
+          grep -Fq 'FIXED_WIDTH_METERS = 516' experiments/basemaps-preview/basemaps-runtime-overrides.js
+          grep -Fq 'makeTransparentPlan' experiments/basemaps-preview/basemaps-runtime-overrides.js
           grep -Fq 'SECTION_FILES' experiments/basemaps-preview/lots-preview.js
           grep -Fq 'JP_SHAREPOINT_INVENTORY' experiments/basemaps-preview/inventory-preview.js
 
@@ -73,6 +78,7 @@ jobs:
           cp experiments/basemaps-preview/index.php deploy-basemaps-preview/index.php
           cp experiments/basemaps-preview/basemaps-preview.css deploy-basemaps-preview/basemaps-preview.css
           cp experiments/basemaps-preview/basemaps-preview.js deploy-basemaps-preview/basemaps-preview.js
+          cp experiments/basemaps-preview/basemaps-runtime-overrides.js deploy-basemaps-preview/basemaps-runtime-overrides.js
           cp experiments/basemaps-preview/inventory-preview.js deploy-basemaps-preview/inventory-preview.js
           cp experiments/basemaps-preview/lots-preview.css deploy-basemaps-preview/lots-preview.css
           cp experiments/basemaps-preview/lots-preview.js deploy-basemaps-preview/lots-preview.js
@@ -101,6 +107,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v5.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v6.json
           dry-run: false
           log-level: standard
