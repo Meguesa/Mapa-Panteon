@@ -65,6 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 source-preview/experiments/basemaps-preview/build-production-preview.py
+          python3 source-preview/experiments/basemaps-preview/install-mobile-search.py deploy-basemaps-preview
           python3 source-preview/experiments/basemaps-preview/build_preview_assets.py \
             source-main/assets/map/base-public.webp \
             deploy-basemaps-preview
@@ -79,11 +80,16 @@ jobs:
           node --check deploy-basemaps-preview/route-render.js
           node --check deploy-basemaps-preview/route-lot-hook.js
           node --check deploy-basemaps-preview/route-nicho-hook.js
+          node --check deploy-basemaps-preview/route-toolbar.js
+          node --check deploy-basemaps-preview/mobile-search-menu.js
           test -s deploy-basemaps-preview/route-navigation.css
+          test -s deploy-basemaps-preview/mobile-search-menu.css
           test -s deploy-basemaps-preview/base-lines.webp
           test -s deploy-basemaps-preview/satellite-base.webp
           test -s deploy-basemaps-preview/data/rutas-panteon.geojson
           test -s deploy-basemaps-preview/data/rutas-panteon-compact.json
+          grep -q 'mobile-search-menu.css?v=1' deploy-basemaps-preview/index.php
+          grep -q 'mobile-search-menu.js?v=1' deploy-basemaps-preview/index.php
 
           python3 - <<'PY'
           import json
