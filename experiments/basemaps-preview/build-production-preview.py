@@ -34,6 +34,7 @@ def copy_code() -> None:
         "production-basemap-toggle.js",
         "production-basemap-toggle.css",
         "route-editor.js",
+        "route-editor-events-fix.js",
         "route-editor.css",
     ]:
         shutil.copy2(require(PREVIEW / name), OUT / name)
@@ -60,7 +61,8 @@ def patch_index() -> None:
   <link rel=\"stylesheet\" href=\"./production-basemap-toggle.css?v=4\" />
   <link rel=\"stylesheet\" href=\"./route-editor.css?v=1\" />
   <script src=\"./production-basemap-toggle.js?v=4\"></script>
-  <script src=\"./route-editor.js?v=1\"></script>"""
+  <script src=\"./route-editor.js?v=2\"></script>
+  <script src=\"./route-editor-events-fix.js?v=1\"></script>"""
     if leaflet not in text:
         raise RuntimeError("No se encontro Leaflet en index.php")
     text = text.replace(leaflet, addon, 1)
@@ -85,7 +87,7 @@ def patch_inventory() -> None:
 
 def patch_javascript_paths() -> None:
     for path in OUT.glob("*.js"):
-        if path.name in {"production-basemap-toggle.js", "route-editor.js"}:
+        if path.name in {"production-basemap-toggle.js", "route-editor.js", "route-editor-events-fix.js"}:
             continue
         text = path.read_text(encoding="utf-8")
         text = text.replace("./data/", "/mapa/data/")
@@ -103,6 +105,7 @@ def validate() -> None:
         OUT / "production-basemap-toggle.js",
         OUT / "production-basemap-toggle.css",
         OUT / "route-editor.js",
+        OUT / "route-editor-events-fix.js",
         OUT / "route-editor.css",
         OUT / "data" / "rutas-panteon.geojson",
     ]
@@ -115,9 +118,11 @@ def validate() -> None:
     app = (OUT / "app.js").read_text(encoding="utf-8")
     toggle = (OUT / "production-basemap-toggle.js").read_text(encoding="utf-8")
     editor = (OUT / "route-editor.js").read_text(encoding="utf-8")
+    event_fix = (OUT / "route-editor-events-fix.js").read_text(encoding="utf-8")
     checks = [
         ("production-basemap-toggle.js?v=4", index),
-        ("route-editor.js?v=1", index),
+        ("route-editor.js?v=2", index),
+        ("route-editor-events-fix.js?v=1", index),
         ("route-editor.css?v=1", index),
         ("/mapa/assets/", index),
         ("/mapa/data/", app),
@@ -129,6 +134,8 @@ def validate() -> None:
         ("route-editor", editor),
         ("rutas-panteon.geojson", editor),
         ("jp-routing-v1", editor),
+        ("disableClickPropagation", event_fix),
+        ("disableScrollPropagation", event_fix),
     ]
     for needle, haystack in checks:
         if needle not in haystack:
