@@ -4,13 +4,6 @@
 }
 
 @media (max-width: 720px) {
-  /*
-   * IMPORTANTE:
-   * portal-integration.css calcula --portal-map-total-header-height en :root.
-   * Si aquí solo cambiamos --portal-map-controls-height, el total heredado puede
-   * conservar el valor anterior y dejar un hueco grande entre la barra azul y
-   * el mapa. Por eso redefinimos también el total y el alto real del layout.
-   */
   body.mapa-page.jp-mobile-search-collapsed {
     --portal-map-controls-height: 52px !important;
     --portal-map-total-header-height: calc(var(--portal-map-toolbar-height) + 52px) !important;
@@ -58,7 +51,7 @@
     max-height: 44px !important;
     padding: 0 !important;
     transform: translateY(-50%);
-    z-index: 4;
+    z-index: 5;
     color: #173650 !important;
     background: #fff !important;
     border: 1px solid rgba(255,255,255,.72) !important;
@@ -73,6 +66,30 @@
     stroke: currentColor;
     stroke-width: 2.2;
     stroke-linecap: round;
+  }
+
+  /* Volver permanece siempre visible fuera del contenido desplegable. */
+  body.mapa-page #backBtn.jp-mobile-back-external {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    right: 56px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: auto !important;
+    min-width: 76px !important;
+    max-width: none !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    padding: 0 14px !important;
+    z-index: 5;
+    background: #fff !important;
+    color: #173650 !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(255,255,255,.72) !important;
+    box-shadow: 0 3px 10px rgba(0,0,0,.12) !important;
   }
 
   body.mapa-page.jp-mobile-search-collapsed .map-controls-header {
@@ -100,7 +117,7 @@
 
   body.mapa-page.jp-mobile-search-open .map-controls-header .map-controls-inner {
     align-items: stretch;
-    padding-right: 52px;
+    padding-right: 148px;
   }
 
   body.mapa-page.jp-mobile-search-open .map-controls-header .controls {
@@ -120,7 +137,8 @@
     min-height: 36px !important;
   }
 
-  body.mapa-page.jp-mobile-search-open #jpMobileSearchToggle {
+  body.mapa-page.jp-mobile-search-open #jpMobileSearchToggle,
+  body.mapa-page.jp-mobile-search-open #backBtn.jp-mobile-back-external {
     top: 21px;
     transform: none;
   }
@@ -143,5 +161,15 @@
     height: 236px !important;
     min-height: 236px !important;
     max-height: 236px !important;
+  }
+
+  body.mapa-page #backBtn.jp-mobile-back-external {
+    min-width: 68px !important;
+    padding: 0 10px !important;
+    right: 54px;
+  }
+
+  body.mapa-page.jp-mobile-search-open .map-controls-header .map-controls-inner {
+    padding-right: 134px;
   }
 }
