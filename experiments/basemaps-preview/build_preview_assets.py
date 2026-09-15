@@ -15,7 +15,9 @@ ROTATION_DEG = 5.7
 DATA_ASPECT = 11100 / 9250
 SATELLITE_ZOOM = 19
 TILE_SIZE = 256
-MAX_OUTPUT_DIM = 4096
+MAX_LINES_DIM = 4096
+MAX_SATELLITE_DIM = 6144
+SATELLITE_EXTENT_FACTOR = 2.20
 ESRI_TILE = (
     "https://server.arcgisonline.com/ArcGIS/rest/services/"
     "World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -32,14 +34,27 @@ def rotate_meters(east: float, north: float, angle_deg: float) -> tuple[float, f
     )
 
 
-def plan_pixel_to_lonlat(x: float, y: float, width: float, height: float) -> tuple[float, float]:
-    height_meters = WIDTH_METERS / DATA_ASPECT
-    east = ((x / width) - 0.5) * WIDTH_METERS
-    north = (0.5 - (y / height)) * height_meters
+def local_meters_to_lonlat(east: float, north: float) -> tuple[float, float]:
     east, north = rotate_meters(east, north, ROTATION_DEG)
     lng = CENTER_LNG + east / (111320 * math.cos(math.radians(CENTER_LAT)))
     lat = CENTER_LAT + north / 110540
     return lng, lat
+
+
+def plan_pixel_to_lonlat(x: float, y: float, width: float, height: float) -> tuple[float, float]:
+    height_meters = WIDTH_METERS / DATA_ASPECT
+    east = ((x / width) - 0.5) * WIDTH_METERS
+    north = (0.5 - (y / height)) * height_meters
+    return local_meters_to_lonlat(east, north)
+
+
+def extended_pixel_to_lonlat(x: float, y: float, width: float, height: float) -> tuple[float, float]:
+    height_meters = WIDTH_METERS / DATA_ASPECT
+    full_width_meters = WIDTH_METERS * SATELLITE_EXTENT_FACTOR
+    full_height_meters = height_meters * SATELLITE_EXTENT_FACTOR
+    east = ((x / width) - 0.5) * full_width_meters
+    north = (0.5 - (y / height)) * full_height_meters
+    return local_meters_to_lonlat(east, north)
 
 
 def lonlat_to_global_pixel(lng: float, lat: float, zoom: int) -> tuple[float, float]:
@@ -64,18 +79,16 @@ def fetch_tile(z: int, x: int, y: int) -> Image.Image:
         return Image.open(io.BytesIO(response.read())).convert("RGB")
 
 
-def output_size(plan_width: int, plan_height: int) -> tuple[int, int]:
-    scale = min(1.0, MAX_OUTPUT_DIM / max(plan_width, plan_height))
-    return max(1, round(plan_width * scale)), max(1, round(plan_height * scale))
+def scaled_size(width: int, height: int, max_dim: int) -> tuple[int, int]:
+    scale = min(1.0, max_dim / max(width, height))
+    return max(1, round(width * scale)), max(1, round(height * scale))
 
 
 def build_lines(plan: Image.Image, target_size: tuple[int, int], output: Path) -> None:
     reduced = plan.convert("RGB").resize(target_size, Image.Resampling.LANCZOS)
     gray = ImageOps.grayscale(reduced)
 
-    # El plano original contiene un fondo blanco y sombras/grises muy ligeros.
-    # Convertimos solamente trazos suficientemente oscuros en negro con alpha.
-    # >= 220 desaparece; <= 145 queda totalmente visible.
+    # Fondo blanco -> alpha 0. Trazos oscuros -> negro visible.
     lut = []
     for value in range(256):
         if value >= 220:
@@ -92,26 +105,24 @@ def build_lines(plan: Image.Image, target_size: tuple[int, int], output: Path) -
     lines.save(output, "WEBP", lossless=True, method=6)
 
 
-def build_satellite(plan_size: tuple[int, int], target_size: tuple[int, int], output: Path) -> None:
-    plan_width, plan_height = plan_size
+def build_satellite(target_size: tuple[int, int], output: Path) -> None:
     target_width, target_height = target_size
 
-    # Transformacion de tres puntos del plano hacia pixeles globales WebMercator.
-    # En esta extension (~516 m) la transformacion es practicamente afin.
+    # El raster satelital cubre 2.2 veces el ancho/alto del plano. La zona
+    # central coincide exactamente con el rectangulo del panteon, mientras que
+    # alrededor quedan visibles carreteras, campos y contexto exterior.
     samples = []
-    for px, py in ((0.0, 0.0), (float(plan_width), 0.0), (0.0, float(plan_height))):
-        lng, lat = plan_pixel_to_lonlat(px, py, plan_width, plan_height)
+    for px, py in ((0.0, 0.0), (float(target_width), 0.0), (0.0, float(target_height))):
+        lng, lat = extended_pixel_to_lonlat(px, py, target_width, target_height)
         gx, gy = lonlat_to_global_pixel(lng, lat, SATELLITE_ZOOM)
         samples.append((gx, gy))
 
     p00, p10, p01 = samples
-    # Coeficientes por pixel del OUTPUT, no del plan original.
     ax = (p10[0] - p00[0]) / target_width
     bx = (p01[0] - p00[0]) / target_height
     ay = (p10[1] - p00[1]) / target_width
     by = (p01[1] - p00[1]) / target_height
 
-    # Cuarta esquina inferida por la transformacion afin.
     p11 = (
         p00[0] + ax * target_width + bx * target_height,
         p00[1] + ay * target_width + by * target_height,
@@ -129,7 +140,7 @@ def build_satellite(plan_size: tuple[int, int], target_size: tuple[int, int], ou
     mosaic = Image.new("RGB", (mosaic_width, mosaic_height))
 
     total_tiles = (max_tx - min_tx + 1) * (max_ty - min_ty + 1)
-    print(f"Descargando {total_tiles} mosaicos Esri z{SATELLITE_ZOOM}...")
+    print(f"Descargando {total_tiles} mosaicos Esri z{SATELLITE_ZOOM} para contexto extendido...")
     for ty in range(min_ty, max_ty + 1):
         for tx in range(min_tx, max_tx + 1):
             tile = fetch_tile(SATELLITE_ZOOM, tx, ty)
@@ -137,8 +148,6 @@ def build_satellite(plan_size: tuple[int, int], target_size: tuple[int, int], ou
 
     origin_x = min_tx * TILE_SIZE
     origin_y = min_ty * TILE_SIZE
-
-    # PIL AFFINE recibe la transformacion inversa: pixel de salida -> pixel fuente.
     coeffs = (
         ax,
         bx,
@@ -153,7 +162,7 @@ def build_satellite(plan_size: tuple[int, int], target_size: tuple[int, int], ou
         coeffs,
         resample=Image.Resampling.BICUBIC,
     )
-    satellite.save(output, "WEBP", quality=90, method=6)
+    satellite.save(output, "WEBP", quality=88, method=6)
 
 
 def main() -> None:
@@ -166,11 +175,20 @@ def main() -> None:
 
     plan = Image.open(plan_path)
     plan_width, plan_height = plan.size
-    target_size = output_size(plan_width, plan_height)
+    lines_size = scaled_size(plan_width, plan_height, MAX_LINES_DIM)
 
-    print(f"Plano fuente: {plan_width}x{plan_height}; preview: {target_size[0]}x{target_size[1]}")
-    build_lines(plan, target_size, output_dir / "base-lines.webp")
-    build_satellite((plan_width, plan_height), target_size, output_dir / "satellite-base.webp")
+    # Mantener la proporcion del plano pero generar el satelite en un lienzo
+    # mayor. Leaflet lo colocara en bounds 2.2x mayores que el plano.
+    raw_sat_width = round(plan_width * SATELLITE_EXTENT_FACTOR)
+    raw_sat_height = round(plan_height * SATELLITE_EXTENT_FACTOR)
+    satellite_size = scaled_size(raw_sat_width, raw_sat_height, MAX_SATELLITE_DIM)
+
+    print(f"Plano fuente: {plan_width}x{plan_height}")
+    print(f"Lineas: {lines_size[0]}x{lines_size[1]}")
+    print(f"Satelite extendido: {satellite_size[0]}x{satellite_size[1]} (factor {SATELLITE_EXTENT_FACTOR})")
+
+    build_lines(plan, lines_size, output_dir / "base-lines.webp")
+    build_satellite(satellite_size, output_dir / "satellite-base.webp")
 
     print("Activos geograficos generados:")
     print(output_dir / "base-lines.webp")
