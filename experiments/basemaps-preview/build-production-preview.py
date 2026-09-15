@@ -92,6 +92,7 @@ def copy_code() -> None:
         "route-render.js",
         "route-lot-hook.js",
         "route-nicho-hook.js",
+        "route-toolbar.js",
         "route-navigation.css",
     ]
     for name in extras:
@@ -119,12 +120,13 @@ def patch_index() -> None:
     addon = """<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>
   <link rel=\"stylesheet\" href=\"./production-basemap-toggle.css?v=4\" />
   <link rel=\"stylesheet\" href=\"./route-editor.css?v=1\" />
-  <link rel=\"stylesheet\" href=\"./route-navigation.css?v=1\" />
+  <link rel=\"stylesheet\" href=\"./route-navigation.css?v=2\" />
   <script src=\"./production-basemap-toggle.js?v=4\"></script>
   <script src=\"./route-graph.js?v=1\"></script>
-  <script src=\"./route-render.js?v=1\"></script>
-  <script src=\"./route-lot-hook.js?v=1\"></script>
-  <script src=\"./route-nicho-hook.js?v=1\"></script>
+  <script src=\"./route-render.js?v=2\"></script>
+  <script src=\"./route-lot-hook.js?v=2\"></script>
+  <script src=\"./route-nicho-hook.js?v=2\"></script>
+  <script src=\"./route-toolbar.js?v=1\"></script>
   <script src=\"./route-editor.js?v=2\"></script>
   <script src=\"./route-editor-events-fix.js?v=1\"></script>"""
     if leaflet not in text:
@@ -158,6 +160,7 @@ def patch_javascript_paths() -> None:
         "route-render.js",
         "route-lot-hook.js",
         "route-nicho-hook.js",
+        "route-toolbar.js",
     }
     for path in OUT.glob("*.js"):
         if path.name in preview_local:
@@ -184,6 +187,7 @@ def validate() -> None:
         OUT / "route-render.js",
         OUT / "route-lot-hook.js",
         OUT / "route-nicho-hook.js",
+        OUT / "route-toolbar.js",
         OUT / "route-navigation.css",
         OUT / "data" / "rutas-panteon.geojson",
         OUT / "data" / "rutas-panteon-compact.json",
@@ -200,13 +204,16 @@ def validate() -> None:
     event_fix = (OUT / "route-editor-events-fix.js").read_text(encoding="utf-8")
     graph = (OUT / "route-graph.js").read_text(encoding="utf-8")
     render = (OUT / "route-render.js").read_text(encoding="utf-8")
+    toolbar = (OUT / "route-toolbar.js").read_text(encoding="utf-8")
+    lot_hook = (OUT / "route-lot-hook.js").read_text(encoding="utf-8")
     checks = [
         ("production-basemap-toggle.js?v=4", index),
         ("route-graph.js?v=1", index),
-        ("route-render.js?v=1", index),
-        ("route-lot-hook.js?v=1", index),
-        ("route-nicho-hook.js?v=1", index),
-        ("route-navigation.css?v=1", index),
+        ("route-render.js?v=2", index),
+        ("route-lot-hook.js?v=2", index),
+        ("route-nicho-hook.js?v=2", index),
+        ("route-toolbar.js?v=1", index),
+        ("route-navigation.css?v=2", index),
         ("route-editor.js?v=2", index),
         ("route-editor-events-fix.js?v=1", index),
         ("route-editor.css?v=1", index),
@@ -220,6 +227,10 @@ def validate() -> None:
         ("disableClickPropagation", event_fix),
         ("JP_ROUTE_GRAPH", graph),
         ("JP_ROUTE_UI", render),
+        ("entranceCoord||r?.network?.entrance", render),
+        ("routeBtn", toolbar),
+        ("jp:route-destination", toolbar),
+        ("jp:route-destination", lot_hook),
     ]
     for needle, haystack in checks:
         if needle not in haystack:
