@@ -1,0 +1,20 @@
+(function(){
+'use strict';
+const URL='./data/rutas-panteon-compact.json';
+const M_PER_UNIT=516/11100;
+const V=3.3;
+const W=1.25;
+let cache=null;
+const key=c=>`${Number(c[0]).toFixed(3)}|${Number(c[1]).toFixed(3)}`;
+const meters=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1])*M_PER_UNIT;
+function build(src){const nodes=new Map();const ensure=c=>{const k=key(c);if(!nodes.has(k))nodes.set(k,{key:k,coord:[+c[0],+c[1]],edges:[]});return nodes.get(k)};(src.r||[]).forEach((r,ri)=>{const access=r[0]||'p',cs=r[1]||[];for(let i=1;i<cs.length;i++){const a=ensure(cs[i-1]),b=ensure(cs[i]),m=meters(a.coord,b.coord);a.edges.push({to:b.key,access,meters:m,route:ri});b.edges.push({to:a.key,access,meters:m,route:ri})}});const e=ensure(src.e);return{nodes,entrance:e.coord,entranceKey:e.key}}
+async function load(){if(cache)return cache;const r=await fetch(`${URL}?v=${Date.now()}`,{cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);cache=build(await r.json());return cache}
+class Heap{constructor(){this.a=[]}push(x){this.a.push(x);let i=this.a.length-1;while(i){const p=(i-1)>>1;if(this.a[p].p<=x.p)break;this.a[i]=this.a[p];i=p}this.a[i]=x}pop(){if(!this.a.length)return null;const root=this.a[0],last=this.a.pop();if(!this.a.length)return root;let i=0;while(true){let l=i*2+1,r=l+1;if(l>=this.a.length)break;let c=r<this.a.length&&this.a[r].p<this.a[l].p?r:l;if(this.a[c].p>=last.p)break;this.a[i]=this.a[c];i=c}this.a[i]=last;return root}get size(){return this.a.length}}
+const sKey=(n,m)=>`${n}#${m}`;
+function splitState(s){const i=s.lastIndexOf('#');return{node:s.slice(0,i),mode:s.slice(i+1)}}
+function shortest(net){const d=new Map(),prev=new Map(),h=new Heap(),start=sKey(net.entranceKey,'v');d.set(start,0);h.push({k:start,p:0});const relax=(from,to,n,meta)=>{if(n>=(d.get(to)??Infinity))return;d.set(to,n);prev.set(to,{state:from,...meta});h.push({k:to,p:n})};while(h.size){const cur=h.pop();if(cur.p!==d.get(cur.k))continue;const s=splitState(cur.k),node=net.nodes.get(s.node);if(s.mode==='v'){relax(cur.k,sKey(node.key,'f'),cur.p+1.5,{kind:'transition'});node.edges.forEach(e=>{if(e.access!=='a'&&e.access!=='v')return;relax(cur.k,sKey(e.to,'v'),cur.p+e.meters/V,{mode:'v',meters:e.meters})})}else node.edges.forEach(e=>relax(cur.k,sKey(e.to,'f'),cur.p+e.meters/W,{mode:'f',meters:e.meters}))}return{d,prev,start}}
+function nearestTarget(net,dest,paths){let best=null;Array.from(net.nodes.values()).map(n=>({n,m:meters(n.coord,dest)})).sort((a,b)=>a.m-b.m).slice(0,24).forEach(c=>{const st=sKey(c.n.key,'f'),base=paths.d.get(st);if(!Number.isFinite(base))return;const total=base+c.m/W;if(!best||total<best.total)best={...c,state:st,total}});return best}
+function reconstruct(net,paths,end,dest){const states=[];let cur=end;while(cur){states.push(cur);if(cur===paths.start)break;cur=paths.prev.get(cur)?.state||null}states.reverse();const vehicle=[],foot=[];let vm=0,fm=0,prevNode=null,prevMode=null;states.forEach(st=>{const s=splitState(st),n=net.nodes.get(s.node);if(s.mode==='v'){if(!vehicle.length||key(vehicle.at(-1))!==n.key)vehicle.push(n.coord)}else{if(!foot.length)foot.push(vehicle.length?vehicle.at(-1):n.coord);if(key(foot.at(-1))!==n.key)foot.push(n.coord)}if(prevNode&&prevNode!==n.key){const m=meters(net.nodes.get(prevNode).coord,n.coord);if(prevMode==='v'&&s.mode==='v')vm+=m;else fm+=m}prevNode=n.key;prevMode=s.mode});const final=net.nodes.get(splitState(end).node),extra=meters(final.coord,dest);fm+=extra;if(!foot.length)foot.push(final.coord);if(key(foot.at(-1))!==key(dest))foot.push(dest);return{vehicle,foot,vehicleMeters:vm,footMeters:fm,totalMeters:vm+fm}}
+async function calculate(dest){const net=await load(),paths=shortest(net),target=nearestTarget(net,dest,paths);if(!target)throw new Error('Destino sin conexión a la red');return{network:net,...reconstruct(net,paths,target.state,dest)}}
+window.JP_ROUTE_GRAPH={load,calculate,meters,vehicleSpeed:V,walkSpeed:W,get network(){return cache}};
+})();
