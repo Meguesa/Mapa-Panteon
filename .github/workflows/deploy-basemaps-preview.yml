@@ -65,10 +65,33 @@ jobs:
         run: |
           set -euo pipefail
           python3 source-preview/experiments/basemaps-preview/build-production-preview.py
+          python3 source-preview/experiments/basemaps-preview/build_preview_assets.py \
+            source-main/assets/map/base-public.webp \
+            deploy-basemaps-preview
+
           php -l deploy-basemaps-preview/index.php
           php -l deploy-basemaps-preview/inventory.php
           node --check deploy-basemaps-preview/app.js
           node --check deploy-basemaps-preview/production-basemap-toggle.js
+          test -s deploy-basemaps-preview/base-lines.webp
+          test -s deploy-basemaps-preview/satellite-base.webp
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+
+          root = Path('deploy-basemaps-preview')
+          lines = Image.open(root / 'base-lines.webp')
+          sat = Image.open(root / 'satellite-base.webp')
+          if lines.size != sat.size:
+              raise SystemExit(f'Tamanos distintos: lineas={lines.size}, satelite={sat.size}')
+          if lines.mode != 'RGBA':
+              lines = lines.convert('RGBA')
+          alpha = lines.getchannel('A')
+          extrema = alpha.getextrema()
+          if extrema[0] != 0 or extrema[1] == 0:
+              raise SystemExit(f'Alpha invalido en plano transparente: {extrema}')
+          print(f'Activos alineados: {lines.size}; alpha={extrema}')
+          PY
           du -sh deploy-basemaps-preview
 
       - name: Publicar preview en cPanel
@@ -83,6 +106,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v9.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v10.json
           dry-run: false
           log-level: standard
