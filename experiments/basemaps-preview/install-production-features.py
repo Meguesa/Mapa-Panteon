@@ -54,6 +54,91 @@ def patch_index(index: Path) -> None:
     index.write_text(text, encoding="utf-8")
 
 
+def build_route_geojson(data_dir: Path) -> None:
+    """Genera el GeoJSON completo del editor desde la red compacta validada.
+
+    El archivo rutas-panteon.geojson guardado en el repositorio es únicamente un
+    contenedor/base del editor. La fuente de verdad para producción es la red
+    compacta usada por el motor de navegación. Generarlo aquí evita que un
+    GeoJSON vacío o desactualizado bloquee el despliegue.
+    """
+    compact_path = require(data_dir / "rutas-panteon-compact.json")
+    compact = json.loads(compact_path.read_text(encoding="utf-8"))
+
+    entrance = compact.get("e")
+    routes = compact.get("r") or []
+    access_names = {
+        "a": "ambos",
+        "p": "peatonal",
+        "v": "vehicular",
+    }
+
+    if not isinstance(entrance, list) or len(entrance) < 2:
+        raise RuntimeError("La red compacta no contiene una entrada valida")
+    if len(routes) != 95:
+        raise RuntimeError(f"Red vial inesperada: {len(routes)} tramos")
+
+    features = [
+        {
+            "type": "Feature",
+            "properties": {
+                "tipo": "entrada",
+                "id": "entrada-principal",
+                "nombre": "Entrada principal",
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": entrance,
+            },
+        }
+    ]
+
+    for index, item in enumerate(routes, start=1):
+        if not isinstance(item, list) or len(item) < 2:
+            raise RuntimeError(f"Tramo invalido en posicion {index}")
+
+        access_code = item[0]
+        coordinates = item[1]
+        if not isinstance(coordinates, list) or len(coordinates) < 2:
+            raise RuntimeError(f"Tramo {index} no contiene al menos dos coordenadas")
+
+        route_id = f"via-{index:03d}"
+        features.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "tipo": "vialidad",
+                    "id": route_id,
+                    "nombre": route_id,
+                    "acceso": access_names.get(access_code, "peatonal"),
+                    "sentido": "ambos",
+                },
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": coordinates,
+                },
+            }
+        )
+
+    geojson = {
+        "type": "FeatureCollection",
+        "name": "rutas-panteon",
+        "properties": {
+            "schema": "jp-routing-v1",
+            "coordinateSystem": "CRS.Simple",
+            "description": "Red interna de vialidades del Panteon Jardines de Juan Pablo",
+        },
+        "features": features,
+    }
+
+    target = data_dir / "rutas-panteon.geojson"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(geojson, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def validate_routes(data_dir: Path) -> None:
     compact_path = require(data_dir / "rutas-panteon-compact.json")
     compact = json.loads(compact_path.read_text(encoding="utf-8"))
@@ -66,8 +151,28 @@ def validate_routes(data_dir: Path) -> None:
 
     geojson_path = require(data_dir / "rutas-panteon.geojson")
     geojson = json.loads(geojson_path.read_text(encoding="utf-8"))
-    if len(geojson.get("features") or []) != 96:
-        raise RuntimeError("GeoJSON de rutas no contiene entrada + 95 tramos")
+    features = geojson.get("features") or []
+    if len(features) != 96:
+        raise RuntimeError(
+            f"GeoJSON de rutas no contiene entrada + 95 tramos: {len(features)} features"
+        )
+
+    entrance_features = [
+        feature
+        for feature in features
+        if feature.get("properties", {}).get("tipo") == "entrada"
+        and feature.get("geometry", {}).get("type") == "Point"
+    ]
+    route_features = [
+        feature
+        for feature in features
+        if feature.get("properties", {}).get("tipo") == "vialidad"
+        and feature.get("geometry", {}).get("type") == "LineString"
+    ]
+    if len(entrance_features) != 1 or len(route_features) != 95:
+        raise RuntimeError(
+            "GeoJSON de rutas invalido: se esperaba 1 entrada y 95 vialidades"
+        )
 
 
 def main() -> None:
@@ -94,8 +199,14 @@ def main() -> None:
     for name in extras:
         copy_file(HERE / name, deploy / name)
 
-    copy_file(HERE / "data" / "rutas-panteon-compact.json", deploy / "data" / "rutas-panteon-compact.json")
-    copy_file(HERE / "data" / "rutas-panteon.geojson", deploy / "data" / "rutas-panteon.geojson")
+    copy_file(
+        HERE / "data" / "rutas-panteon-compact.json",
+        deploy / "data" / "rutas-panteon-compact.json",
+    )
+
+    # La red compacta es la fuente de verdad. Generamos el GeoJSON completo en
+    # cada build para que el editor y la navegación productiva queden sincronizados.
+    build_route_geojson(deploy / "data")
 
     patch_index(index)
     validate_routes(deploy / "data")
