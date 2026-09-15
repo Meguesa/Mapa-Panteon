@@ -82,15 +82,26 @@ jobs:
           root = Path('deploy-basemaps-preview')
           lines = Image.open(root / 'base-lines.webp')
           sat = Image.open(root / 'satellite-base.webp')
-          if lines.size != sat.size:
-              raise SystemExit(f'Tamanos distintos: lineas={lines.size}, satelite={sat.size}')
+
+          # Las lineas cubren exactamente el plano. El satelite cubre una zona
+          # mayor alrededor del panteon, por lo que DEBE ser mas grande.
+          if sat.width <= lines.width or sat.height <= lines.height:
+              raise SystemExit(f'El satelite no esta extendido: lineas={lines.size}, satelite={sat.size}')
+
+          ratio_lines = lines.width / lines.height
+          ratio_sat = sat.width / sat.height
+          if abs(ratio_lines - ratio_sat) > 0.02:
+              raise SystemExit(f'Proporcion distinta: lineas={ratio_lines:.4f}, satelite={ratio_sat:.4f}')
+
           if lines.mode != 'RGBA':
               lines = lines.convert('RGBA')
           alpha = lines.getchannel('A')
           extrema = alpha.getextrema()
           if extrema[0] != 0 or extrema[1] == 0:
               raise SystemExit(f'Alpha invalido en plano transparente: {extrema}')
-          print(f'Activos alineados: {lines.size}; alpha={extrema}')
+
+          print(f'Lineas transparentes: {lines.size}; alpha={extrema}')
+          print(f'Satelite extendido: {sat.size}')
           PY
           du -sh deploy-basemaps-preview
 
@@ -106,6 +117,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v10.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v11.json
           dry-run: false
           log-level: standard
