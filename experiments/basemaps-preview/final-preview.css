@@ -1,0 +1,46 @@
+.runtime-controls {
+  display: none !important;
+}
+
+.basemap-switcher {
+  width: 218px;
+  padding: 8px;
+}
+
+.basemap-option {
+  grid-template-columns: 42px 1fr;
+  gap: 8px;
+  padding: 7px;
+}
+
+.basemap-thumb {
+  width: 42px;
+  height: 34px;
+}
+
+.section-hover-popup .maplibregl-popup-content {
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: rgba(16, 36, 58, 0.94);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 20px rgba(0,0,0,.22);
+}
+
+.section-hover-popup .maplibregl-popup-tip {
+  border-top-color: rgba(16, 36, 58, 0.94);
+  border-bottom-color: rgba(16, 36, 58, 0.94);
+}
+
+.preview-main,
+#map {
+  background: #fff;
+}
+
+@media (max-width: 900px) {
+  .basemap-switcher {
+    width: 198px;
+  }
+}
