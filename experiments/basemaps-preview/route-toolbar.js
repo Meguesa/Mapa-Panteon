@@ -151,6 +151,29 @@ function onSearchClick(){
   updateButton();
 }
 
+function dedupeStatusLegends(){
+  const panel=document.getElementById('panelBody');
+  if(!panel)return;
+
+  // lotes-nv2-match.js ya muestra la leyenda oficial con la misma paleta de
+  // Nichos V2. public-ui-fixes.js conserva una leyenda histórica adicional
+  // ("Colores de disponibilidad"). Cuando ambas coinciden en la misma vista,
+  // eliminamos únicamente la histórica para no repetir información.
+  if(!panel.querySelector('.lot-nv2-legend'))return;
+  panel.querySelectorAll('.jp-status-legend').forEach(el=>el.remove());
+}
+
+function installLegendDedupeObserver(){
+  const panel=document.getElementById('panelBody');
+  if(!panel||panel.dataset.jpLegendDedupe==='1')return;
+  panel.dataset.jpLegendDedupe='1';
+  dedupeStatusLegends();
+
+  const observer=new MutationObserver(()=>dedupeStatusLegends());
+  observer.observe(panel,{childList:true,subtree:true});
+  window.JP_LEGEND_DEDUPE_OBSERVER=observer;
+}
+
 function install(){
   searchButton=document.getElementById('searchBtn');
   backButton=document.getElementById('backBtn');
@@ -184,10 +207,15 @@ function install(){
     if(lastDestination&&!selectionMode)clearDestination();
   });
 
+  installLegendDedupeObserver();
+
   // El estado de la ruta puede cambiar desde la ficha o desde código externo.
-  setInterval(updateButton,250);
+  setInterval(()=>{
+    updateButton();
+    dedupeStatusLegends();
+  },250);
   updateButton();
-  console.info('[Rutas] Botón global “Cómo llegar” instalado junto a Buscar.');
+  console.info('[Rutas] Botón global “Cómo llegar” instalado junto a Buscar; leyenda duplicada controlada.');
   return true;
 }
 
