@@ -44,10 +44,8 @@ def patch_index() -> None:
 
     leaflet = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>'
     addon = """<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>
-  <link rel=\"stylesheet\" href=\"https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css\" />
-  <link rel=\"stylesheet\" href=\"./production-basemap-toggle.css?v=2\" />
-  <script src=\"https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js\"></script>
-  <script src=\"./production-basemap-toggle.js?v=2\"></script>"""
+  <link rel=\"stylesheet\" href=\"./production-basemap-toggle.css?v=3\" />
+  <script src=\"./production-basemap-toggle.js?v=3\"></script>"""
     if leaflet not in text:
         raise RuntimeError("No se encontro Leaflet en index.php")
     text = text.replace(leaflet, addon, 1)
@@ -99,11 +97,13 @@ def validate() -> None:
     app = (OUT / "app.js").read_text(encoding="utf-8")
     toggle = (OUT / "production-basemap-toggle.js").read_text(encoding="utf-8")
     checks = [
-        ("production-basemap-toggle.js?v=2", index),
+        ("production-basemap-toggle.js?v=3", index),
         ("/mapa/assets/", index),
         ("/mapa/data/", app),
         ("JP_LEAFLET_MAP", toggle),
-        ("mixBlendMode = 'multiply'", toggle),
+        ("satellite-base.webp", toggle),
+        ("base-lines.webp", toggle),
+        ("PLAN_LINES_OPACITY = 0.90", toggle),
         ("Satélite", toggle),
     ]
     for needle, haystack in checks:
