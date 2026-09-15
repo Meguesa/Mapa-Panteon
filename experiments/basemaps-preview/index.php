@@ -17,6 +17,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="./basemaps-preview.css?v=12" />
   <link rel="stylesheet" href="./lots-preview.css?v=3" />
+  <link rel="stylesheet" href="./final-preview.css?v=1" />
 </head>
 <body>
   <header class="preview-header">
@@ -54,7 +55,6 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
     <div id="sectionHoverLabel" class="section-hover-label" hidden></div>
     <div id="mapStatus" class="map-status hidden" aria-live="polite"></div>
 
-    <!-- Controles de compatibilidad: mantienen la lógica de lotes activa sin mostrar UI lateral. -->
     <div class="runtime-controls" aria-hidden="true">
       <select id="lotSectionSelect">
         <option value=""></option>
@@ -99,11 +99,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
       const blankLightStyle = {
         version: 8,
         sources: {},
-        layers: [{
-          id: 'background',
-          type: 'background',
-          paint: { 'background-color': '#ffffff' }
-        }]
+        layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#ffffff' } }]
       };
       maplibregl.Map = class JPPreviewMap extends OriginalMap {
         constructor(options) {
