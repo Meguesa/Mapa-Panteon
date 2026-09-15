@@ -1,0 +1,10 @@
+{
+  "type": "FeatureCollection",
+  "name": "rutas-panteon",
+  "properties": {
+    "schema": "jp-routing-v1",
+    "coordinateSystem": "CRS.Simple",
+    "description": "Red interna de vialidades del Panteón Jardines de Juan Pablo"
+  },
+  "features": []
+}
