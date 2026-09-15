@@ -1,0 +1,99 @@
+/* Menú compacto de búsqueda para móvil. En escritorio no modifica el layout. */
+.jp-mobile-search-toggle {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  body.mapa-page.jp-mobile-search-collapsed {
+    --portal-map-controls-height: 52px;
+  }
+
+  body.mapa-page.jp-mobile-search-open {
+    --portal-map-controls-height: 202px;
+  }
+
+  body.mapa-page .map-controls-header {
+    transition: height .18s ease, min-height .18s ease, max-height .18s ease;
+  }
+
+  body.mapa-page .map-controls-header .map-controls-inner {
+    position: relative;
+    width: 100%;
+  }
+
+  body.mapa-page .jp-mobile-search-toggle {
+    display: inline-grid !important;
+    place-items: center;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    padding: 0 !important;
+    transform: translateY(-50%);
+    z-index: 4;
+    color: #173650 !important;
+    background: #fff !important;
+    border: 1px solid rgba(255,255,255,.72) !important;
+    border-radius: 50% !important;
+    box-shadow: 0 3px 10px rgba(0,0,0,.16) !important;
+  }
+
+  body.mapa-page .jp-mobile-search-toggle svg {
+    width: 21px;
+    height: 21px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+  }
+
+  body.mapa-page.jp-mobile-search-collapsed .map-controls-header .controls {
+    display: none !important;
+  }
+
+  body.mapa-page.jp-mobile-search-collapsed .map-controls-header .map-controls-inner {
+    justify-content: flex-end;
+  }
+
+  body.mapa-page.jp-mobile-search-open .map-controls-header {
+    padding: 10px 12px !important;
+  }
+
+  body.mapa-page.jp-mobile-search-open .map-controls-header .map-controls-inner {
+    align-items: stretch;
+    padding-right: 52px;
+  }
+
+  body.mapa-page.jp-mobile-search-open .map-controls-header .controls {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  body.mapa-page.jp-mobile-search-open .map-controls-header #searchInput {
+    grid-column: 1 / -1 !important;
+  }
+
+  body.mapa-page.jp-mobile-search-open .map-controls-header button,
+  body.mapa-page.jp-mobile-search-open .map-controls-header select,
+  body.mapa-page.jp-mobile-search-open .map-controls-header input {
+    min-height: 36px !important;
+  }
+
+  body.mapa-page.jp-mobile-search-open #jpMobileSearchToggle {
+    top: 21px;
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  body.mapa-page.jp-mobile-search-open {
+    --portal-map-controls-height: 236px;
+  }
+}
