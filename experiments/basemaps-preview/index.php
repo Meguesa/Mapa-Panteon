@@ -69,7 +69,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
 
         <label class="calibration-control"><span>Opacidad <strong id="opacityValue">31%</strong></span><input id="opacityRange" type="range" min="10" max="90" step="1" value="31" /></label>
         <label class="calibration-control"><span>Rotación <strong id="rotationValue">5.7°</strong></span><input id="rotationRange" type="range" min="-45" max="45" step="0.1" value="5.7" /></label>
-        <label class="calibration-control"><span>Ancho del plano <strong id="widthValue">516 m</strong></span><input id="widthRange" type="range" min="400" max="900" step="1" value="516" /></label>
+        <div id="approvedWidthReadout" class="preview-info-row approved-width-readout"><span>Ancho del plano</span><strong>516 m · aprobado</strong></div>
 
         <div class="calibration-coordinates">
           <div><span>Latitud centro</span><strong id="planLatValue">25.816327</strong></div>
@@ -168,6 +168,13 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
         flipHorizontal: false,
         flipVertical: true
       }));
+
+      let calibration = {};
+      try {
+        calibration = JSON.parse(localStorage.getItem('jp-basemap-calibration-v2') || '{}') || {};
+      } catch (_) {}
+      calibration.widthMeters = 516;
+      localStorage.setItem('jp-basemap-calibration-v2', JSON.stringify(calibration));
     })();
   </script>
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
@@ -182,6 +189,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
       };
     })();
   </script>
+  <script src="./basemaps-runtime-overrides.js?v=1"></script>
   <script src="./basemaps-preview.js?v=10"></script>
   <script src="./inventory-preview.js?v=1"></script>
   <script src="./lots-preview.js?v=2"></script>
