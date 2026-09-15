@@ -18,6 +18,7 @@ def copy_code() -> None:
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
     (OUT / "vendor").mkdir(parents=True)
+    (OUT / "data").mkdir(parents=True)
 
     deploy = MAIN / "deploy"
     for name in ["index.php", "inventory.php"]:
@@ -27,8 +28,20 @@ def copy_code() -> None:
     for path in deploy.glob("*.css"):
         shutil.copy2(path, OUT / path.name)
     shutil.copy2(require(deploy / "vendor" / "msal-browser.min.js"), OUT / "vendor" / "msal-browser.min.js")
-    shutil.copy2(require(PREVIEW / "production-basemap-toggle.js"), OUT / "production-basemap-toggle.js")
-    shutil.copy2(require(PREVIEW / "production-basemap-toggle.css"), OUT / "production-basemap-toggle.css")
+
+    # Complementos exclusivos del preview.
+    for name in [
+        "production-basemap-toggle.js",
+        "production-basemap-toggle.css",
+        "route-editor.js",
+        "route-editor.css",
+    ]:
+        shutil.copy2(require(PREVIEW / name), OUT / name)
+
+    shutil.copy2(
+        require(PREVIEW / "data" / "rutas-panteon.geojson"),
+        OUT / "data" / "rutas-panteon.geojson",
+    )
 
 
 def patch_index() -> None:
@@ -44,8 +57,10 @@ def patch_index() -> None:
 
     leaflet = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>'
     addon = """<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>
-  <link rel=\"stylesheet\" href=\"./production-basemap-toggle.css?v=3\" />
-  <script src=\"./production-basemap-toggle.js?v=3\"></script>"""
+  <link rel=\"stylesheet\" href=\"./production-basemap-toggle.css?v=4\" />
+  <link rel=\"stylesheet\" href=\"./route-editor.css?v=1\" />
+  <script src=\"./production-basemap-toggle.js?v=4\"></script>
+  <script src=\"./route-editor.js?v=1\"></script>"""
     if leaflet not in text:
         raise RuntimeError("No se encontro Leaflet en index.php")
     text = text.replace(leaflet, addon, 1)
@@ -70,7 +85,7 @@ def patch_inventory() -> None:
 
 def patch_javascript_paths() -> None:
     for path in OUT.glob("*.js"):
-        if path.name == "production-basemap-toggle.js":
+        if path.name in {"production-basemap-toggle.js", "route-editor.js"}:
             continue
         text = path.read_text(encoding="utf-8")
         text = text.replace("./data/", "/mapa/data/")
@@ -87,6 +102,9 @@ def validate() -> None:
         OUT / "nichos-v2-preview.js",
         OUT / "production-basemap-toggle.js",
         OUT / "production-basemap-toggle.css",
+        OUT / "route-editor.js",
+        OUT / "route-editor.css",
+        OUT / "data" / "rutas-panteon.geojson",
     ]
     for path in required:
         require(path)
@@ -96,8 +114,11 @@ def validate() -> None:
     index = (OUT / "index.php").read_text(encoding="utf-8")
     app = (OUT / "app.js").read_text(encoding="utf-8")
     toggle = (OUT / "production-basemap-toggle.js").read_text(encoding="utf-8")
+    editor = (OUT / "route-editor.js").read_text(encoding="utf-8")
     checks = [
-        ("production-basemap-toggle.js?v=3", index),
+        ("production-basemap-toggle.js?v=4", index),
+        ("route-editor.js?v=1", index),
+        ("route-editor.css?v=1", index),
         ("/mapa/assets/", index),
         ("/mapa/data/", app),
         ("JP_LEAFLET_MAP", toggle),
@@ -105,6 +126,9 @@ def validate() -> None:
         ("base-lines.webp", toggle),
         ("PLAN_LINES_OPACITY = 0.90", toggle),
         ("Satélite", toggle),
+        ("route-editor", editor),
+        ("rutas-panteon.geojson", editor),
+        ("jp-routing-v1", editor),
     ]
     for needle, haystack in checks:
         if needle not in haystack:
