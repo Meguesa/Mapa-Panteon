@@ -16,7 +16,11 @@ DATA_ASPECT = 11100 / 9250
 SATELLITE_ZOOM = 19
 TILE_SIZE = 256
 MAX_LINES_DIM = 4096
-MAX_SATELLITE_DIM = 6144
+# Mantener ambos rasters con las mismas dimensiones de pixeles. El satelite
+# sigue cubriendo un area 2.2x mayor porque Leaflet lo coloca sobre bounds
+# expandidos; esta resolucion coincide practicamente con la fuente Esri z19 y
+# evita memoria extra innecesaria en movil.
+MAX_SATELLITE_DIM = 4096
 SATELLITE_EXTENT_FACTOR = 2.20
 ESRI_TILE = (
     "https://server.arcgisonline.com/ArcGIS/rest/services/"
@@ -177,8 +181,9 @@ def main() -> None:
     plan_width, plan_height = plan.size
     lines_size = scaled_size(plan_width, plan_height, MAX_LINES_DIM)
 
-    # Mantener la proporcion del plano pero generar el satelite en un lienzo
-    # mayor. Leaflet lo colocara en bounds 2.2x mayores que el plano.
+    # Mantener la proporcion del plano pero generar el satelite para bounds
+    # 2.2x mayores. La resolucion de pixeles puede ser igual a la del plano:
+    # la extension geografica la define Leaflet, no el tamano del archivo.
     raw_sat_width = round(plan_width * SATELLITE_EXTENT_FACTOR)
     raw_sat_height = round(plan_height * SATELLITE_EXTENT_FACTOR)
     satellite_size = scaled_size(raw_sat_width, raw_sat_height, MAX_SATELLITE_DIM)
