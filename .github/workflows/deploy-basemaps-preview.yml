@@ -74,6 +74,7 @@ jobs:
           node --check deploy-basemaps-preview/app.js
           node --check deploy-basemaps-preview/production-basemap-toggle.js
           node --check deploy-basemaps-preview/route-editor.js
+          node --check deploy-basemaps-preview/route-editor-events-fix.js
           test -s deploy-basemaps-preview/base-lines.webp
           test -s deploy-basemaps-preview/satellite-base.webp
           test -s deploy-basemaps-preview/data/rutas-panteon.geojson
@@ -127,6 +128,6 @@ jobs:
           timeout: 180000
           local-dir: ./deploy-basemaps-preview/
           server-dir: ./preview-basemaps/
-          state-name: .ftp-deploy-sync-state-basemaps-preview-v12.json
+          state-name: .ftp-deploy-sync-state-basemaps-preview-v13.json
           dry-run: false
           log-level: standard
