@@ -4,6 +4,7 @@
   const SATELLITE_IMAGE = './satellite-base.webp';
   const PLAN_LINES_IMAGE = './base-lines.webp';
   const PLAN_LINES_OPACITY = 0.90;
+  const SATELLITE_EXTENT_FACTOR = 2.20;
 
   let leafletMap = null;
   let baseOverlay = null;
@@ -25,7 +26,7 @@
   }
 
   // Se carga antes de app.js para capturar exactamente la instancia Leaflet
-  // que usa el mapa productivo. No reconstruimos secciones, lotes ni nichos.
+  // que usa el mapa productivo. No reconstruimos secciones, manzanas, lotes ni nichos.
   installLeafletCapture();
 
   function findBaseOverlay() {
@@ -43,25 +44,55 @@
 
   function ensurePreviewPanes() {
     if (!leafletMap) return;
+
+    // El satelite y las lineas SIEMPRE quedan debajo de overlayPane, donde
+    // Leaflet dibuja secciones, manzanas y lotes. Esto garantiza que los
+    // colores/estatus del mapa productivo sigan visibles en modo Satelite.
     if (!leafletMap.getPane('jpSatellitePane')) {
       const pane = leafletMap.createPane('jpSatellitePane');
-      pane.style.zIndex = '180';
+      pane.style.zIndex = '90';
       pane.style.pointerEvents = 'none';
     }
     if (!leafletMap.getPane('jpPlanLinesPane')) {
       const pane = leafletMap.createPane('jpPlanLinesPane');
-      pane.style.zIndex = '190';
+      pane.style.zIndex = '110';
       pane.style.pointerEvents = 'none';
     }
+
+    const overlayPane = leafletMap.getPane('overlayPane');
+    if (overlayPane) overlayPane.style.zIndex = '450';
+    const markerPane = leafletMap.getPane('markerPane');
+    if (markerPane) markerPane.style.zIndex = '600';
+    const tooltipPane = leafletMap.getPane('tooltipPane');
+    if (tooltipPane) tooltipPane.style.zIndex = '650';
+    const popupPane = leafletMap.getPane('popupPane');
+    if (popupPane) popupPane.style.zIndex = '700';
+  }
+
+  function expandedBounds(bounds, factor) {
+    const west = bounds.getWest();
+    const east = bounds.getEast();
+    const south = bounds.getSouth();
+    const north = bounds.getNorth();
+    const centerX = (west + east) / 2;
+    const centerY = (south + north) / 2;
+    const halfWidth = Math.abs(east - west) * factor / 2;
+    const halfHeight = Math.abs(north - south) * factor / 2;
+    return L.latLngBounds(
+      [centerY - halfHeight, centerX - halfWidth],
+      [centerY + halfHeight, centerX + halfWidth]
+    );
   }
 
   function ensureSatelliteLayers() {
     if (!leafletMap || !baseOverlay) return false;
     ensurePreviewPanes();
-    const bounds = baseOverlay.getBounds();
+
+    const planBounds = baseOverlay.getBounds();
+    const satelliteBounds = expandedBounds(planBounds, SATELLITE_EXTENT_FACTOR);
 
     if (!satelliteOverlay) {
-      satelliteOverlay = L.imageOverlay(SATELLITE_IMAGE, bounds, {
+      satelliteOverlay = L.imageOverlay(SATELLITE_IMAGE, satelliteBounds, {
         pane: 'jpSatellitePane',
         opacity: 0,
         interactive: false,
@@ -70,7 +101,7 @@
     }
 
     if (!linesOverlay) {
-      linesOverlay = L.imageOverlay(PLAN_LINES_IMAGE, bounds, {
+      linesOverlay = L.imageOverlay(PLAN_LINES_IMAGE, planBounds, {
         pane: 'jpPlanLinesPane',
         opacity: 0,
         interactive: false,
@@ -89,7 +120,31 @@
       element.style.opacity = String(value);
       element.style.mixBlendMode = 'normal';
       element.style.filter = 'none';
+      element.style.pointerEvents = 'none';
     }
+  }
+
+  function raiseOperationalLayers() {
+    if (!leafletMap) return;
+
+    const excluded = new Set([baseOverlay, satelliteOverlay, linesOverlay]);
+    const seen = new Set();
+
+    function raise(layer) {
+      if (!layer || excluded.has(layer) || seen.has(layer)) return;
+      seen.add(layer);
+
+      // Primero recorremos grupos GeoJSON/FeatureGroup. Luego subimos cada Path
+      // individual (seccion/manzana/lote) sobre las imagenes base.
+      if (typeof layer.eachLayer === 'function' && !(layer instanceof L.Path)) {
+        try { layer.eachLayer(raise); } catch {}
+      }
+      if (layer instanceof L.Path && typeof layer.bringToFront === 'function') {
+        try { layer.bringToFront(); } catch {}
+      }
+    }
+
+    try { leafletMap.eachLayer(raise); } catch {}
   }
 
   function updateButtons() {
@@ -106,17 +161,22 @@
 
     if (currentMode === 'satellite') {
       if (!ensureSatelliteLayers()) return;
-      // Ambas imagenes usan EXACTAMENTE los bounds de base-public.webp.
-      // Por eso siguen pixel a pixel el mismo pan/zoom de Leaflet y no hay
-      // sincronizacion entre dos motores de mapas.
+
+      // El mapa productivo NO cambia. Solamente sustituimos la imagen base por:
+      //   1) un raster satelital mas grande que el predio, y
+      //   2) las lineas negras transparentes del plano sobre el cementerio.
       setBaseOpacity(0);
       satelliteOverlay.setOpacity(1);
       linesOverlay.setOpacity(PLAN_LINES_OPACITY);
+      ensurePreviewPanes();
+      window.requestAnimationFrame(raiseOperationalLayers);
+      window.setTimeout(raiseOperationalLayers, 120);
     } else {
-      // Light es exactamente el mapa de main, sin ningun mapa externo debajo.
+      // Light vuelve exactamente al mapa de main.
       setBaseOpacity(1);
       if (satelliteOverlay) satelliteOverlay.setOpacity(0);
       if (linesOverlay) linesOverlay.setOpacity(0);
+      window.requestAnimationFrame(raiseOperationalLayers);
     }
 
     updateButtons();
@@ -144,6 +204,14 @@
     return true;
   }
 
+  function attachLayerOrdering() {
+    if (!leafletMap) return;
+    leafletMap.on('layeradd', function () {
+      if (currentMode !== 'satellite') return;
+      window.requestAnimationFrame(raiseOperationalLayers);
+    });
+  }
+
   function boot() {
     installLeafletCapture();
     let attempts = 0;
@@ -161,8 +229,9 @@
       window.clearInterval(timer);
       createUi();
       ensureSatelliteLayers();
+      attachLayerOrdering();
       setMode('light');
-      console.info('[Mapa Preview] Light usa main sin cambios; Satelite usa raster precalibrado + lineas transparentes en el mismo CRS Leaflet.');
+      console.info('[Mapa Preview] Light = main. Satelite = raster extendido + lineas transparentes; capas y colores operativos permanecen arriba.');
     }, 50);
   }
 
