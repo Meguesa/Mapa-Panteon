@@ -1,6 +1,16 @@
 name: Publicar Mapa independiente en cPanel
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'inventory.php'
+      - 'app.js'
+      - 'src/js/sharepoint-inventario-portal.js'
+      - 'src/js/sharepoint-inventario.js'
+      - 'tools/build_portal_map.py'
+      - '.github/workflows/deploy-cpanel.yml'
   workflow_dispatch:
     inputs:
       publicar_datos_estructurales:
