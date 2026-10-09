@@ -323,36 +323,75 @@
     if (inventoryPromise) return inventoryPromise;
 
     window.JP_INVENTORY_RUNTIME.refreshing = true;
+    delete window.JP_INVENTORY_RUNTIME.error;
+
     inventoryPromise = loadInventoryFromPortal()
       .then(publishInventory)
       .catch(function (error) {
         inventoryPromise = null;
         window.JP_INVENTORY_RUNTIME.refreshing = false;
-        window.JP_INVENTORY_RUNTIME.source = "sharepoint-error";
+        window.JP_INVENTORY_RUNTIME.source = liveInventory ? "sharepoint" : "local-fallback";
         window.JP_INVENTORY_RUNTIME.error = error && error.message ? error.message : String(error || "");
-        console.error("[Mapa] No fue posible cargar inventario mediante la sesion del Portal.", error);
-        throw error;
+        console.warn("[Mapa] SharePoint no respondio a tiempo; se conserva el inventario local publicado.", error);
+        return null;
       });
 
     return inventoryPromise;
   }
 
+  async function loadLocalInventory(input, init) {
+    const response = await originalFetch(input, {
+      ...(init || {}),
+      cache: "no-cache"
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} al cargar inventario local`);
+    }
+
+    const payload = await response.clone().json();
+    const items = Array.isArray(payload && payload.items) ? payload.items : [];
+
+    window.JP_INVENTORY_RUNTIME.source = "local-fallback";
+    window.JP_INVENTORY_RUNTIME.inventory = payload;
+    window.JP_INVENTORY_RUNTIME.updatedAt = payload && payload.updatedAt
+      ? payload.updatedAt
+      : null;
+
+    console.info(`[Mapa] Inventario local disponible inmediatamente: ${items.length} registros.`);
+    return response;
+  }
+
   window.JP_REFRESH_INVENTORY = startInventoryLoad;
 
+  /*
+   * El mapa abre con el ultimo inventario publicado y actualiza SharePoint en
+   * segundo plano. Esto evita que una respuesta lenta de Graph bloquee todo el
+   * mapa o provoque HTTP 502 en cPanel.
+   */
   window.fetch = async function (input, init) {
     if (!isInventoryRequest(input)) return originalFetch(input, init);
 
+    if (liveInventory) {
+      return inventoryResponse(liveInventory);
+    }
+
+    startInventoryLoad();
+
     try {
+      return await loadLocalInventory(input, init);
+    } catch (localError) {
+      console.warn("[Mapa] No fue posible leer el inventario local; se esperara SharePoint.", localError);
+
       const inventory = await startInventoryLoad();
-      return inventoryResponse(inventory);
-    } catch (error) {
-      const message = error && error.message ? error.message : String(error || "Error desconocido");
+      if (inventory) return inventoryResponse(inventory);
+
       return new Response(JSON.stringify({
-        source: "sharepoint-error",
+        source: "unavailable",
         items: [],
-        error: message
+        error: window.JP_INVENTORY_RUNTIME.error || "Inventario no disponible"
       }), {
-        status: 503,
+        status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
           "Cache-Control": "no-store"
