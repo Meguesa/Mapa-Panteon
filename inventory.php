@@ -7,6 +7,11 @@ require_once dirname(__DIR__) . '/includes/portal-sharepoint.php';
 
 portal_require_authentication();
 
+// La sincronizacion completa se ejecuta en segundo plano desde el navegador.
+// Se amplía el tiempo de ejecución para permitir recorrer todas las paginas de
+// Graph sin que el proceso PHP sea terminado por el limite habitual de 30 s.
+@set_time_limit(120);
+
 if (session_status() === PHP_SESSION_ACTIVE) {
     session_write_close();
 }
