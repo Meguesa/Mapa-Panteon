@@ -462,6 +462,28 @@ function buildInventarioIndex(raw){
   return index;
 }
 
+
+window.addEventListener("jp-inventory-updated", (event) => {
+  const inventory = event?.detail?.inventory;
+  if (!inventory || !Array.isArray(inventory.items)) return;
+
+  inventarioBase = buildInventarioIndex(inventory);
+
+  try {
+    applyFiltroEstatusToLotes();
+  } catch (error) {
+    console.warn("[Mapa] No fue posible refrescar estilos de lotes tras actualizar inventario.", error);
+  }
+
+  try {
+    if (currentManzanaFeature) refreshManzanaPanel();
+  } catch (error) {
+    console.warn("[Mapa] No fue posible refrescar el panel de manzana.", error);
+  }
+
+  console.info(`[Mapa] Inventario SharePoint aplicado sin recargar: ${inventory.items.length} registros.`);
+});
+
 function normalizeCatalogSearchText(value){
   return (value ?? "")
     .toString()
