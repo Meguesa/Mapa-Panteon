@@ -16,14 +16,16 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $siteId = 'meguesajdjp.sharepoint.com,7d618515-ccdf-44ae-aec4-c446c915b022,deb28a80-f058-4343-87f1-e268cef2dc10';
 $listId = '208b6147-b487-48f8-ba3f-97aeb1ba9021';
+// Mantener esta consulta deliberadamente compacta: el inventario contiene miles
+// de propiedades y una respuesta demasiado grande puede superar el timeout del
+// hosting antes de que Microsoft Graph termine de responder.
 $fields = [
     'Title','Clave_Propiedad','Tipo_Propiedad','Seccion','Manzana','Esta_Construida',
-    'Estatus_Venta','Estatus_Uso','Referencia_ProcaP','Fecha_Venta','Fecha_Uso',
-    'Fuente_Ultima_Actualizacion','Fecha_Actualizacion','Categoria','Codigo','ZonaId',
-    'Cara','Estatus_Ocupacion','Finado','Observaciones','Ultima_Actualizacion_Venta',
-    'Ultima_Actualizacion_Ocupacion','Fuente_Actualizacion_Venta','Fuente_Actualizacion_Ocupacion',
-    'Observacion_Automatizacion','Capacidad_Inhumaciones','Uso_Inhumacion','Capacidad_Cenizas',
-    'Usos_Cenizas','Estatus_Capacidad','Clave_Busqueda_Principal','Claves_Busqueda_Alternas'
+    'Estatus_Venta','Estatus_Uso','Referencia_ProcaP','Fuente_Ultima_Actualizacion',
+    'Fecha_Actualizacion','Categoria','Codigo','ZonaId','Cara','Estatus_Ocupacion',
+    'Finado','Observaciones','Observacion_Automatizacion','Capacidad_Inhumaciones',
+    'Uso_Inhumacion','Capacidad_Cenizas','Usos_Cenizas','Estatus_Capacidad',
+    'Clave_Busqueda_Principal','Claves_Busqueda_Alternas'
 ];
 
 try {
@@ -31,10 +33,15 @@ try {
     $token = portal_graph_app_token($config);
     $url = 'https://graph.microsoft.com/v1.0/sites/' . rawurlencode($siteId)
         . '/lists/' . rawurlencode($listId)
-        . '/items?$top=999&$expand=fields($select=' . implode(',', $fields) . ')';
+        . '/items?$top=250&$expand=fields($select=' . implode(',', $fields) . ')';
 
     $items = [];
+    $pageCount = 0;
     while ($url !== '') {
+        $pageCount++;
+        if ($pageCount > 100) {
+            throw new RuntimeException('Se excedio el limite de paginas esperado al consultar inventario.');
+        }
         $page = portal_remote_json($url, 'GET', [
             'Authorization: Bearer ' . $token,
             'Accept: application/json',
@@ -48,6 +55,7 @@ try {
     echo json_encode([
         'source' => 'sharepoint',
         'updatedAt' => gmdate('c'),
+        'pages' => $pageCount,
         'graphItems' => $items,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $error) {
